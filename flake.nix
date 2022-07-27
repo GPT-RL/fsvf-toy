@@ -11,16 +11,19 @@
   }: let
     out = system: let
       pkgs = import nixpkgs {inherit system;};
-      inherit (pkgs) poetry2nix;
-      pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
-        projectDir = ./.;
-      };
+      #inherit (pkgs) poetry2nix;
+      #pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
+      #projectDir = ./.;
+      #};
     in {
       devShell = pkgs.mkShell {
-        buildInputs = [pythonEnv];
-      };
-      defaultPackage = pkgs.poetry2nix.mkPoetryApplication {
-        projectDir = ./.;
+        buildInputs = [
+          #pkgs.python310Packages.pyspark
+          #pkgs.python39Packages.apache-beam
+          pkgs.spark
+          #pkgs.python
+        ];
+        #shellHook = ''export SPARK_HOME=${pkgs.spark}'';
       };
     };
   in
