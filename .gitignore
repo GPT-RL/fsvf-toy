@@ -4,3 +4,4 @@ runs
 .ipynb_*
 *.csv
 .direnv
+result
