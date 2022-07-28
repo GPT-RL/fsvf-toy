@@ -18,9 +18,13 @@
           etils = import ./etils.nix {
             inherit pkgs pyfinal pyprev;
           };
-          dm-tree = import ./dm-tree.nix {
-            inherit pkgs pyfinal pyprev;
-          };
+          dm-tree =
+            if system == "x86_64-darwin"
+            then
+              import ./dm-tree.nix {
+                inherit pkgs pyfinal pyprev;
+              }
+            else pyprev.dm-tree;
           tensorflow-datasets = import ./tensorflow-datasets.nix {
             inherit pkgs pyfinal pyprev;
           };
