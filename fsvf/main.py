@@ -16,10 +16,10 @@
 #
 import logging
 from pprint import pprint
-from dataset import myrlu  # noqa
 
 import tensorflow_datasets as tfds
 from apache_beam.options.pipeline_options import PipelineOptions
+from dataset import my_rlu
 
 
 def run(argv=None, save_main_session=True):
