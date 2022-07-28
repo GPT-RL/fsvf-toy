@@ -8,20 +8,27 @@
     self,
     nixpkgs,
     utils,
-  }: let
-    out = system: let
+  }:
+    utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
-      inherit (pkgs) poetry2nix;
-      pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
-        projectDir = ./.;
-      };
-    in {
-      devShell = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          python39Packages.apache-beam
+      run-dependencies = p:
+        with p; [
+          apache-beam
+          tensorflow-datasets
+          tensorflow
         ];
+      dev-dependencies = p:
+        with p; [
+          ipython
+          ipdb
+          black
+        ];
+    in rec {
+      devShell = pkgs.mkShell {
+        buildInputs =
+          run-dependencies (pkgs.python39Packages)
+          ++ dev-dependencies (pkgs.python39Packages);
       };
-    };
-  in
-    with utils.lib; eachSystem defaultSystems out;
+      packages.default = pkgs.python39.withPackages run-dependencies;
+    });
 }
