@@ -60,6 +60,7 @@ _FEATURE_DESCRIPTION = {
 EPISODES_PER = 8
 DISCOUNT = 0.99
 
+
 def filename(prefix: str, num_shards: int, shard_id: int):
     return os.fspath(tfds.core.Path(f"{prefix}-{shard_id:05d}-of-{num_shards:05d}"))
 
@@ -108,14 +109,11 @@ class MyRLU(tfds.core.GeneratorBasedBuilder):
         game = self.builder_config.game
         return atari_utils.file_prefix(self._INPUT_FILE_PREFIX, run, game)
 
-
     def get_citation(self):
         return atari_utils.citation()
 
-
     def get_description(self):
         return atari_utils.description()
-
 
     def num_shards(self):
         return atari_utils.num_shards(self.builder_config.game, self._SHARDS)
@@ -167,12 +165,11 @@ class MyRLU(tfds.core.GeneratorBasedBuilder):
             )
         )
 
-
     def get_episode_id(self, episode):
         return atari_utils.episode_id(episode)
 
     def tf_example_to_step_ds(
-            self, tf_example: tf.train.Example
+        self, tf_example: tf.train.Example
     ) -> Tuple[Dict[str, Any], int]:
         """Generates an RLDS episode from an Atari TF Example.
         Args:
@@ -286,8 +283,7 @@ class MyRLU(tfds.core.GeneratorBasedBuilder):
         """Yields examples."""
         beam = tfds.core.lazy_imports.apache_beam
         file_paths = paths["file_paths"]
+        # for p in file_paths:
+        # assert "Alien" in inp
         file_paths = file_paths[:1]  # TODO
         return beam.Create(file_paths) | beam.FlatMap(self.generate_examples_one_file)
-
-
-

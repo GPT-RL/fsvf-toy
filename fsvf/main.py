@@ -19,7 +19,7 @@ from pprint import pprint
 
 import tensorflow_datasets as tfds
 from apache_beam.options.pipeline_options import PipelineOptions
-from dataset import my_rlu
+import dataset
 
 
 def run(argv=None, save_main_session=True):
