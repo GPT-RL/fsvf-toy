@@ -23,12 +23,14 @@
           ipdb
           black
         ];
+      all-dependencies = p: run-dependencies p ++ dev-dependencies p;
     in rec {
       devShell = pkgs.mkShell {
-        buildInputs =
-          run-dependencies (pkgs.python39Packages)
-          ++ dev-dependencies (pkgs.python39Packages);
+        buildInputs = all-dependencies (pkgs.python39Packages);
+        shellHook = ''
+          export pythonbreakpoint=ipdb.set_trace
+        '';
       };
-      packages.default = pkgs.python39.withPackages run-dependencies;
+      packages.default = pkgs.python39.withPackages all-dependencies;
     });
 }
