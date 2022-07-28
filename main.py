@@ -31,15 +31,16 @@ def run(argv=None, save_main_session=True):
 
     # We use the save_main_session option because one or more DoFn's in this
     # workflow rely on global context (e.g., a module imported at module level).
-    beam_options = PipelineOptions(
-        [
-            "--runner=SparkRunner",
-            "--spark_version=3",
-        ]
+    tfds.builder("my_mnist").download_and_prepare(
+        download_config=tfds.download.DownloadConfig(
+            beam_options=PipelineOptions(
+                [
+                    "--runner=SparkRunner",
+                    "--spark_version=3",
+                ]
+            )
+        )
     )
-    dl_config = tfds.download.DownloadConfig(beam_options=beam_options)
-    builder = tfds.builder('my_mnist')
-    builder.download_and_prepare(download_config=dl_config)
     df = tfds.load("my_mnist")
 
     for example in df["train"].take(1):

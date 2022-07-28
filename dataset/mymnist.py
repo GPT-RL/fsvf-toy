@@ -110,14 +110,24 @@ class MyMNIST(tfds.core.GeneratorBasedBuilder):
         Yields:
           Generator yielding the next examples
         """
+
         images = _extract_mnist_images(data_path, num_examples)
         labels = _extract_mnist_labels(label_path, num_examples)
         data = list(zip(images, labels))
-
         # Using index as key since data is always loaded in same order.
-        for index, (image, label) in enumerate(data):
-            record = {"image": image, "label": label}
-            yield index, record
+
+        beam = tfds.core.lazy_imports.apache_beam
+
+        def _process_example(index_image_label):
+            index, (image, label) = index_image_label
+            # Use filename as key
+            return index, {"image": image, "label": label}
+
+        return beam.Create(list(enumerate(data))) | beam.Map(_process_example)
+
+        # for index, (image, label) in enumerate(data):
+        # record = {"image": image, "label": label}
+        # yield index, record
 
 
 def _extract_mnist_images(image_filepath, num_images):
