@@ -19,10 +19,11 @@ from pprint import pprint
 
 import tensorflow_datasets as tfds
 from apache_beam.options.pipeline_options import PipelineOptions
-import dataset
+# noinspection PyUnresolvedReferences
+import dataset # flake8: noqa
 
 
-def run(argv=None, save_main_session=True):
+def run():
     tfds.builder("my_rlu").download_and_prepare(
         download_config=tfds.download.DownloadConfig(
             beam_options=PipelineOptions(
