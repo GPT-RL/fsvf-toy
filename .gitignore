@@ -5,3 +5,4 @@ runs
 *.csv
 .direnv
 result
+.env

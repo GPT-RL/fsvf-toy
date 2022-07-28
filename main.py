@@ -18,6 +18,7 @@ import logging
 import re
 import tensorflow_datasets as tfds
 from dataset import myrlu
+import os
 
 import apache_beam as beam
 from apache_beam.io import ReadFromText
@@ -36,7 +37,7 @@ def run(argv=None, save_main_session=True):
                     "--spark_version=3",
                 ]
             )
-        )
+        ),
     )
     df = tfds.load("my_rlu")
 
