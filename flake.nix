@@ -10,16 +10,7 @@
     utils,
   }: let
     out = system: let
-      pkgs = import nixpkgs {
-        inherit system;
-        #overlays = [
-        #(final: prev: {
-        #apache-beam = prev.apache-beam.override {
-        #buildInputs = [prev.spark];
-        #};
-        #})
-        #];
-      };
+      pkgs = import nixpkgs {inherit system;};
       inherit (pkgs) poetry2nix;
       pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
         projectDir = ./.;
@@ -28,8 +19,6 @@
       devShell = pkgs.mkShell {
         buildInputs = with pkgs; [
           python39Packages.apache-beam
-          pkgs.spark
-          pkgs.jdk11
         ];
       };
     };
