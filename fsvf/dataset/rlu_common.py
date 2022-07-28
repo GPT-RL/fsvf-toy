@@ -16,11 +16,10 @@
 """Module including definitions for all RLU datasets."""
 
 import os
-
 from typing import Any, Dict, Generator, List, Tuple
+
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
-
 
 _DESCRIPTION = """
 RL Unplugged is suite of benchmarks for offline reinforcement learning. The RL

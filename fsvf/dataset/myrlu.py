@@ -21,9 +21,8 @@ from typing import Any, Dict, Generator, Tuple
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
-from tensorflow_datasets.rl_unplugged import atari_utils
-
 from dataset.rlu_common import RLUBuilder
+from tensorflow_datasets.rl_unplugged import atari_utils
 
 # Note that rewards and episode_return are actually also clipped.
 _FEATURE_DESCRIPTION = {
