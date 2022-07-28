@@ -18,6 +18,9 @@
           etils = import ./etils.nix {
             inherit pkgs pyfinal pyprev;
           };
+          dm-tree = import ./dm-tree.nix {
+            inherit pkgs pyfinal pyprev;
+          };
           tensorflow-datasets = import ./tensorflow-datasets.nix {
             inherit pkgs pyfinal pyprev;
           };
