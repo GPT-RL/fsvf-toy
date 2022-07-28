@@ -24,14 +24,11 @@ from apache_beam.io import ReadFromText
 from apache_beam.io import WriteToText
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
+from pprint import pprint
 
 
 def run(argv=None, save_main_session=True):
-    """Main entry point; defines and runs the wordcount pipeline."""
-
-    # We use the save_main_session option because one or more DoFn's in this
-    # workflow rely on global context (e.g., a module imported at module level).
-    tfds.builder("my_mnist").download_and_prepare(
+    tfds.builder("my_rlu").download_and_prepare(
         download_config=tfds.download.DownloadConfig(
             beam_options=PipelineOptions(
                 [
@@ -41,13 +38,12 @@ def run(argv=None, save_main_session=True):
             )
         )
     )
-    df = tfds.load("my_mnist")
+    df = tfds.load("my_rlu")
 
     for example in df["train"].take(1):
-        image = example["image"]
-        label = example["label"]
-        print("image:", image.shape)
-        print("label:", label)
+        print("\n\nFirst data point;")
+        pprint(example)
+        print("\n\n")
 
 
 if __name__ == "__main__":
