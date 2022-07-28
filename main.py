@@ -17,7 +17,7 @@
 import logging
 import re
 import tensorflow_datasets as tfds
-from dataset import mymnist
+from dataset import myrlu
 
 import apache_beam as beam
 from apache_beam.io import ReadFromText

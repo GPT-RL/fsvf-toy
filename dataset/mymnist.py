@@ -125,10 +125,6 @@ class MyMNIST(tfds.core.GeneratorBasedBuilder):
 
         return beam.Create(list(enumerate(data))) | beam.Map(_process_example)
 
-        # for index, (image, label) in enumerate(data):
-        # record = {"image": image, "label": label}
-        # yield index, record
-
 
 def _extract_mnist_images(image_filepath, num_images):
     with tf.io.gfile.GFile(image_filepath, "rb") as f:
