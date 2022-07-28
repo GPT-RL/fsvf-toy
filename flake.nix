@@ -42,7 +42,7 @@
       all = p: runtime p ++ dev p;
     in {
       devShell = pkgs.mkShell {
-        buildInputs = all python.pkgs ++ [pkgs.pre-commit];
+        buildInputs = [pkgs.pre-commit] ++ all python.pkgs;
         shellHook = ''
           export pythonbreakpoint=ipdb.set_trace
         '';
