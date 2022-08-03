@@ -19,8 +19,9 @@ from pprint import pprint
 
 import tensorflow_datasets as tfds
 from apache_beam.options.pipeline_options import PipelineOptions
+
 # noinspection PyUnresolvedReferences
-import dataset # flake8: noqa
+import dataset  # flake8: noqa
 
 
 def run():
