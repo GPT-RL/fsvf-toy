@@ -10,35 +10,24 @@
     utils,
   }:
     utils.lib.eachDefaultSystem (system: let
+      useCuda = system == "x86_64-linux";
       pkgs = import nixpkgs {
         inherit system;
+        config.allowUnfree = true;
+        config.cudaSupport = useCuda;
+        inherit (pkgs.cudaPackages) cudatoolkit;
+        inherit (pkgs.linuxPackages) nvidia_x11;
       };
-      python = let
-        packageOverrides = pyfinal: pyprev: {
-          etils = import ./etils.nix {
-            inherit pkgs pyfinal pyprev;
-          };
-          dm-tree =
-            if system == "x86_64-darwin"
-            then
-              import ./dm-tree.nix {
-                inherit pkgs pyfinal pyprev;
-              }
-            else pyprev.dm-tree;
-          tensorflow-datasets = import ./tensorflow-datasets.nix {
-            inherit pkgs pyfinal pyprev;
-          };
-        };
-      in
-        pkgs.python39.override {
-          inherit packageOverrides;
-          self = python;
-        };
+      python = pkgs.python39.override {
+        packageOverrides = pyfinal: pyprev: {};
+        self = python;
+      };
       runtime = p:
         with p; [
           apache-beam
-          tensorflow-datasets
-          tensorflow
+          flax
+          jax
+          jaxlibWithCuda
         ];
       dev = p:
         with p; [
@@ -51,7 +40,11 @@
       devShell = pkgs.mkShell {
         buildInputs = [pkgs.pre-commit] ++ all python.pkgs;
         shellHook = ''
+          export pythonfaulthandler=1
           export pythonbreakpoint=ipdb.set_trace
+          set -o allexport
+          source .env
+          set +o allexport
         '';
       };
       packages.default = python.withPackages all;
