@@ -13,7 +13,7 @@
       useCuda = system == "x86_64-linux";
       pkgs = import nixpkgs {
         inherit system;
-        config.allowUnfree = true;
+        config.allowUnfree = useCuda;
         config.cudaSupport = useCuda;
       };
       python = pkgs.python39.override {
@@ -50,24 +50,23 @@
         inherit (pkgs.cudaPackages) cudatoolkit;
         inherit (pkgs.linuxPackages) nvidia_x11;
         buildInputs = with pkgs;
-          [
-            cudatoolkit
-            nvidia_x11
-            pre-commit
-          ]
+          [pre-commit]
+          ++ lib.optionals useCuda [nvidia_x11 cudatoolkit]
           ++ all python.pkgs;
-        shellHook = ''
-          export pythonfaulthandler=1
-          export pythonbreakpoint=ipdb.set_trace
-          set -o allexport
-          source .env
-          set +o allexport
-
+        shellHook =
+          ''
+            export pythonfaulthandler=1
+            export pythonbreakpoint=ipdb.set_trace
+            set -o allexport
+            source .env
+            set +o allexport
+          ''
+          + pkgs.lib.optionalString useCuda ''
             export CUDA_PATH=${cudatoolkit.lib}
             export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
             export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
             export EXTRA_CCFLAGS="-i/usr/include"
-        '';
+          '';
       };
       packages.default = python.withPackages all;
     });
