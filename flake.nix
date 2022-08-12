@@ -23,6 +23,10 @@
             inherit (pyfinal) buildPythonPackage fetchPypi;
           };
 
+          clu = import ./nixfiles/clu.nix (args
+            // {
+              inherit pkgs;
+            });
           dollar-lambda = import ./nixfiles/dollar-lambda.nix (args
             // {
               inherit (pyfinal) pytypeclass;
@@ -33,6 +37,7 @@
       runtime = p:
         with p; [
           apache-beam
+          clu
           dollar-lambda
           flax
           jax
