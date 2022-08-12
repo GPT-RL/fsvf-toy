@@ -17,12 +17,23 @@
         config.cudaSupport = useCuda;
       };
       python = pkgs.python39.override {
-        packageOverrides = pyfinal: pyprev: {};
-        self = python;
+        packageOverrides = pyfinal: pyprev: rec {
+          args = {
+            inherit (pkgs) lib;
+            inherit (pyfinal) buildPythonPackage fetchPypi;
+          };
+
+          dollar-lambda = import ./nixfiles/dollar-lambda.nix (args
+            // {
+              inherit (pyfinal) pytypeclass;
+            });
+          pytypeclass = import ./nixfiles/pytypeclass.nix args;
+        };
       };
       runtime = p:
         with p; [
           apache-beam
+          dollar-lambda
           flax
           jax
           jaxlibWithCuda
