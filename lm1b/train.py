@@ -25,8 +25,9 @@ import functools
 import os
 
 from absl import logging
-from clu import metric_writers
-from clu import periodic_actions
+
+# from clu import metric_writers
+# from clu import periodic_actions
 from flax import jax_utils
 from flax import linen as nn
 from flax.training import checkpoints
@@ -35,12 +36,12 @@ from flax.training import train_state
 import jax
 from jax import random
 import jax.numpy as jnp
-import ml_collections
 import numpy as np
 import optax
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
-import input_pipeline
+# import input_pipeline
 import models
 import temperature_sampler
 
@@ -358,7 +359,73 @@ def generate_prediction(
     return exemplars
 
 
-def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
+def train_and_evaluate(
+    # Per device batch size for training.
+    per_device_batch_size: int,
+    # Per device batch size for training.
+    eval_per_device_batch_size: int,
+    # Sampling temperature for language model inference.
+    sampling_temperature: float,
+    # Top k cutoff for logit sampling. If 0 then no top-k cutoff is used.
+    sampling_top_k: int,
+    num_train_steps: int,
+    # Number of steps to take during evaluation. Large enough to evaluate all.
+    # Large enough to evaluate all samples: 306_688 / (32 * 8)
+    num_eval_steps: int,
+    # Number of steps to generate predictions.
+    # -1 will use the whole eval dataset.
+    num_predict_steps: int,
+    # Base learning rate.
+    learning_rate: float,
+    # Linear learning rate warmup.
+    warmup_steps: int,
+    # Cross entropy loss label smoothing.
+    label_smoothing: float,
+    # Decay factor for AdamW style weight decay.
+    weight_decay: float,
+    # Maximum length cutoff for training examples.
+    max_target_length: int,
+    # Maximum length cutoff for eval examples.
+    max_eval_target_length: int,
+    # Maximum length cutoff for predicted tokens.
+    max_predict_length: int,
+    # Final logit transform uses embedding matrix transpose.
+    logits_via_embedding: bool,
+    # Number of transformer layers.
+    num_layers: int,
+    # Size of query/key/value for attention.
+    qkv_dim: int,
+    # Size of embeddings.
+    emb_dim: int,
+    # Size of the MLP.
+    mlp_dim: int,
+    # Number of attention heads.
+    num_heads: int,
+    # Dropout rate.
+    dropout_rate: float,
+    # Attention dropout rate.
+    attention_dropout_rate: float,
+    # Whether to save model checkpoints.
+    save_checkpoints: bool,
+    # Whether to restore from existing model checkpoints.
+    restore_checkpoints: bool,
+    # Save a checkpoint every these number of steps.
+    checkpoint_every_steps: int,
+    # Frequency of eval during training, e.g. every 1_000 steps.
+    eval_every_steps: int,
+    # Use bfloat16 mixed precision training instead of float32.
+    use_bfloat16: bool,
+    # Integer for PRNG random seed.
+    seed: int,
+    # Prompt for language model sampling.
+    prompts: str,
+
+    # our prompts
+    context_size: int
+    gamma: float,
+    height: int,
+    width: int,
+):
     """Runs a training and evaluation loop.
 
     Args:
@@ -366,20 +433,52 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
       workdir: Working directory for checkpoints and TF summaries. If this
         contains checkpoint training will be resumed from the latest checkpoint.
     """
-    tf.io.gfile.makedirs(workdir)
+    # tf.io.gfile.makedirs(workdir)
 
-    vocab_path = config.vocab_path
-    if vocab_path is None:
-        vocab_path = os.path.join(workdir, "sentencepiece_model")
-        config.vocab_path = vocab_path
-    tf.io.gfile.makedirs(os.path.split(vocab_path)[0])
+    # vocab_path = config.vocab_path
+    # if vocab_path is None:
+    # vocab_path = os.path.join(workdir, "sentencepiece_model")
+    # config.vocab_path = vocab_path
+    # tf.io.gfile.makedirs(os.path.split(vocab_path)[0])
 
     # Load Dataset
     # ---------------------------------------------------------------------------
     logging.info("Initializing dataset.")
-    train_ds, eval_ds, _, encoder = input_pipeline.get_datasets(
-        n_devices=jax.local_device_count(), config=config, vocab_path=vocab_path
+    # train_ds, eval_ds, _, encoder = input_pipeline.get_datasets(
+    # n_devices=jax.local_device_count(), config=config, vocab_path=vocab_path
+    # )
+    tf.random.set_seed(seed)
+
+    def gen():
+        action_delta = tf.constant(
+                [0, -1],
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+            )
+        while True:
+            maxval = tf.constant([height, width])
+            goal = tf.random.uniform(shape=[2], maxval=maxval dtype=tf.int32)
+            states = tf.random.uniform(shape=[context_size, 2] ,
+                                       maxval=tf.expand_dims(maxval, 0), dtype=tf.int32)
+            action = tf.random.uniform(maxval=4)
+            actions = action * tf.ones(context_size, 1)
+            states_after_action= states + tf.expand_dims(action_delta[action],0)
+            distance = tf.sum(tf.abs(tf.expand_dims(goal, 0) -
+                                     states_after_action), axis=1)
+            discounted_return
+
+            yield 42, ragged_tensor
+
+    dataset = tf.data.Dataset.from_generator(
+        gen,
+        output_signature=(
+            tf.TensorSpec(shape=(), dtype=tf.int32),
+            tf.RaggedTensorSpec(shape=(2, None), dtype=tf.int32),
+        ),
     )
+    for x in tfds.as_numpy(dataset):
+        breakpoint()
 
     train_iter = iter(train_ds)
     vocab_size = int(encoder.vocab_size())
@@ -397,7 +496,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
             tokenized_batch[i, : toks.shape[0] - 1] = toks[:-1]
         return tokenized_batch
 
-    tokenized_prompts = encode_strings([config.prompts], config.max_predict_length)
+    tokenized_prompts = encode_strings([prompts], max_predict_length)
 
     logging.info("Initializing model, optimizer, and step functions.")
     # Build Model and Optimizer
@@ -451,11 +550,11 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         # Grab last step.
         start_step = int(state.step)
 
-    writer = metric_writers.create_default_writer(
-        workdir, just_logging=jax.process_index() > 0
-    )
-    if start_step == 0:
-        writer.write_hparams(dict(config))
+    # writer = metric_writers.create_default_writer(
+    # workdir, just_logging=jax.process_index() > 0
+    # )
+    # if start_step == 0:
+    # writer.write_hparams(dict(config))
 
     # Replicate optimizer.
     state = jax_utils.replicate(state)
@@ -493,77 +592,75 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
 
     logging.info("Starting training loop.")
     hooks = []
-    report_progress = periodic_actions.ReportProgress(
-        num_train_steps=config.num_train_steps, writer=writer
-    )
-    if jax.process_index() == 0:
-        hooks += [
-            report_progress,
-            periodic_actions.Profile(logdir=workdir, num_profile_steps=5),
-        ]
+    # report_progress = periodic_actions.ReportProgress(
+    # num_train_steps=config.num_train_steps, writer=writer
+    # )
+    # if jax.process_index() == 0:
+    # hooks += [
+    # report_progress,
+    # periodic_actions.Profile(logdir=workdir, num_profile_steps=5),
+    # ]
     train_metrics = []
-    with metric_writers.ensure_flushes(writer):
-        for step in range(start_step, config.num_train_steps):
-            is_last_step = step == config.num_train_steps - 1
+    # with metric_writers.ensure_flushes(writer):
+    for step in range(start_step, config.num_train_steps):
+        is_last_step = step == config.num_train_steps - 1
 
-            # Shard data to devices and do a training step.
-            with jax.profiler.StepTraceAnnotation("train", step_num=step):
-                batch = common_utils.shard(
-                    jax.tree_util.tree_map(np.asarray, next(train_iter))
+        # Shard data to devices and do a training step.
+        with jax.profiler.StepTraceAnnotation("train", step_num=step):
+            batch = common_utils.shard(
+                jax.tree_util.tree_map(np.asarray, next(train_iter))
+            )
+            state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
+            train_metrics.append(metrics)
+
+        # Quick indication that training is happening.
+        logging.log_first_n(logging.INFO, "Finished training step %d.", 5, step)
+        for h in hooks:
+            h(step)
+
+        # Periodic metric handling.
+        if step % config.eval_every_steps == 0 or is_last_step:
+            with report_progress.timed("training_metrics"):
+                logging.info("Gathering training metrics.")
+                train_metrics = common_utils.get_metrics(train_metrics)
+                lr = train_metrics.pop("learning_rate").mean()
+                metrics_sums = jax.tree_util.tree_map(jnp.sum, train_metrics)
+                denominator = metrics_sums.pop("denominator")
+                summary = jax.tree_util.tree_map(
+                    lambda x: x / denominator, metrics_sums
+                )  # pylint: disable=cell-var-from-loop
+                summary["learning_rate"] = lr
+                summary["perplexity"] = jnp.clip(jnp.exp(summary["loss"]), a_max=1.0e4)
+                summary = {"train_" + k: v for k, v in summary.items()}
+                # writer.write_scalars(step, summary)
+                train_metrics = []
+
+            with report_progress.timed("eval"):
+                eval_results = evaluate(
+                    p_eval_step=p_eval_step,
+                    params=state.params,
+                    eval_ds=eval_ds,
+                    num_eval_steps=config.num_eval_steps,
                 )
-                state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
-                train_metrics.append(metrics)
+                # (clipped) perplexity after averaging log-perplexitie
+                eval_results["perplexity"] = jnp.clip(
+                    jnp.exp(eval_results["loss"]), a_max=1.0e4
+                )
+                # writer.write_scalars(
+                # step, {"eval_" + k: v for k, v in eval_results.items()}
+                # )
 
-            # Quick indication that training is happening.
-            logging.log_first_n(logging.INFO, "Finished training step %d.", 5, step)
-            for h in hooks:
-                h(step)
-
-            # Periodic metric handling.
-            if step % config.eval_every_steps == 0 or is_last_step:
-                with report_progress.timed("training_metrics"):
-                    logging.info("Gathering training metrics.")
-                    train_metrics = common_utils.get_metrics(train_metrics)
-                    lr = train_metrics.pop("learning_rate").mean()
-                    metrics_sums = jax.tree_util.tree_map(jnp.sum, train_metrics)
-                    denominator = metrics_sums.pop("denominator")
-                    summary = jax.tree_util.tree_map(
-                        lambda x: x / denominator, metrics_sums
-                    )  # pylint: disable=cell-var-from-loop
-                    summary["learning_rate"] = lr
-                    summary["perplexity"] = jnp.clip(
-                        jnp.exp(summary["loss"]), a_max=1.0e4
-                    )
-                    summary = {"train_" + k: v for k, v in summary.items()}
-                    writer.write_scalars(step, summary)
-                    train_metrics = []
-
-                with report_progress.timed("eval"):
-                    eval_results = evaluate(
-                        p_eval_step=p_eval_step,
-                        params=state.params,
-                        eval_ds=eval_ds,
-                        num_eval_steps=config.num_eval_steps,
-                    )
-                    # (clipped) perplexity after averaging log-perplexitie
-                    eval_results["perplexity"] = jnp.clip(
-                        jnp.exp(eval_results["loss"]), a_max=1.0e4
-                    )
-                    writer.write_scalars(
-                        step, {"eval_" + k: v for k, v in eval_results.items()}
-                    )
-
-                with report_progress.timed("generate_text"):
-                    exemplars = generate_prediction(
-                        p_pred_step=p_pred_step,
-                        params=state.params,
-                        tokenized_prompts=tokenized_prompts,
-                        eos_id=eos_id,
-                        inference_rng=inference_rng,
-                        decode_tokens=decode_tokens,
-                        max_predict_length=config.max_predict_length,
-                    )
-                    writer.write_texts(step, {"samples": exemplars})
+            with report_progress.timed("generate_text"):
+                exemplars = generate_prediction(
+                    p_pred_step=p_pred_step,
+                    params=state.params,
+                    tokenized_prompts=tokenized_prompts,
+                    eos_id=eos_id,
+                    inference_rng=inference_rng,
+                    decode_tokens=decode_tokens,
+                    max_predict_length=config.max_predict_length,
+                )
+                # writer.write_texts(step, {"samples": exemplars})
 
             # Save a checkpoint on one host after every checkpoint_freq steps.
             save_checkpoint = step % config.checkpoint_every_steps == 0 or is_last_step

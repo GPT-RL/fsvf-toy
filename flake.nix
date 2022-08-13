@@ -32,16 +32,22 @@
               inherit (pyfinal) pytypeclass;
             });
           pytypeclass = import ./nixfiles/pytypeclass.nix args;
+          #tensorflow_datasets =
+          #import ./nixfiles/tensorflow-datasets.nix (args
+          #// {inherit pyfinal pyprev;});
         };
       };
       runtime = p:
         with p; [
           apache-beam
-          clu
+          #clu
           dollar-lambda
           flax
           jax
           jaxlibWithCuda
+          pyyaml
+          tensorflow
+          #tensorflow-datasets
         ];
       dev = p:
         with p; [
@@ -60,8 +66,8 @@
           ++ all python.pkgs;
         shellHook =
           ''
-            export pythonfaulthandler=1
-            export pythonbreakpoint=ipdb.set_trace
+            export PYTHONFAULTHANDLER=1
+            export PYTHONBREAKPOINT=ipdb.set_trace
             set -o allexport
             source .env
             set +o allexport
