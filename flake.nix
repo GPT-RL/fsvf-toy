@@ -19,7 +19,6 @@
       python = pkgs.python39.override {
         packageOverrides = pyfinal: pyprev: rec {
           args = {
-            inherit (pkgs) lib;
             inherit (pyfinal) buildPythonPackage fetchPypi;
           };
 
@@ -30,6 +29,7 @@
           dollar-lambda = import ./nixfiles/dollar-lambda.nix (args
             // {
               inherit (pyfinal) pytypeclass;
+              inherit (pkgs) lib;
             });
           pytypeclass = import ./nixfiles/pytypeclass.nix args;
           #tensorflow_datasets =
