@@ -29,6 +29,17 @@
               inherit (pyfinal) pytypeclass;
               inherit (pkgs) lib;
             });
+          gym = import ./nixfiles/gym.nix {
+            inherit
+              (pyfinal)
+              buildPythonPackage
+              cloudpickle
+              gym-notices
+              numpy
+              pytest
+              ;
+            inherit (pkgs) fetchFromGitHub;
+          };
           gym-notices = import ./nixfiles/gym-notices.nix args;
           pytypeclass = import ./nixfiles/pytypeclass.nix args;
           #tensorflow_datasets =
@@ -42,6 +53,7 @@
           #clu
           dollar-lambda
           flax
+          gym
           jax
           jaxlibWithCuda
           pyyaml
