@@ -67,11 +67,22 @@
           black
         ];
       all = p: runtime p ++ dev p;
+      inherit (pkgs) poetry2nix;
       pythonEnv =
-        pkgs.poetry2nix.mkPoetryEnv
+        poetry2nix.mkPoetryEnv
         {
           inherit python;
           projectDir = ./.;
+          overrides =
+            poetry2nix.overrides.withDefaults
+            (pyfinal: pyprev: let
+              args = {
+                inherit (pyfinal) buildPythonPackage fetchPypi;
+              };
+            in rec {
+              #gym-minigrid = import ./nixfiles/gym-minigrid.nix args;
+            });
+
           #++ all python.pkgs;
           #shellHook =
           #''
@@ -95,19 +106,20 @@
         buildInputs =
           [pythonEnv pkgs.pre-commit]
           ++ pkgs.lib.optionals useCuda [nvidia_x11 cudatoolkit];
-        shellHook = ''
-          export pythonfaulthandler=1
-          export pythonbreakpoint=ipdb.set_trace
-          set -o allexport
-          source .env
-          set +o allexport
-        ''
-        + pkgs.lib.optionalString useCuda ''
-        export CUDA_PATH=${cudatoolkit.lib}
-        export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
-        export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
-        export EXTRA_CCFLAGS="-i/usr/include"
-        '';
+        shellHook =
+          ''
+            export pythonfaulthandler=1
+            export pythonbreakpoint=ipdb.set_trace
+            set -o allexport
+            source .env
+            set +o allexport
+          ''
+          + pkgs.lib.optionalString useCuda ''
+            export CUDA_PATH=${cudatoolkit.lib}
+            export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
+            export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
+            export EXTRA_CCFLAGS="-i/usr/include"
+          '';
       };
       #packages.default = python.withPackages all;
     });
