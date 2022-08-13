@@ -12,21 +12,13 @@
     utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
       python = pkgs.python39;
-      inherit (pkgs) poetry2nix;
-      inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
-      poetryArgs = {
+      poetryEnv = pkgs.poetry2nix.mkPoetryEnv {
         inherit python;
-        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
-          jaxlib = pyprev.jaxlibWithCuda;
-          tensorflow = python.pkgs.tensorflow;
-        });
         projectDir = ./.;
       };
-      poetryEnv = mkPoetryEnv poetryArgs;
     in {
       devShell = pkgs.mkShell {
         buildInputs = [poetryEnv];
       };
-      packages.default = python.withPackages (p: [p.tensorflow]);
     });
 }

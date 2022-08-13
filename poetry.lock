@@ -505,7 +505,7 @@ docs = ["jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "jaraco.packaging (>=9)
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<3.11"
-content-hash = "38119c11c3ba441e58cff0ab404fe4c37f3028de536c86b68f335770145e296d"
+content-hash = "43a31cc55c29d49de46f4d0b0d3acd2e14eafa9dc7a658232d401905697d29f0"
 
 [metadata.files]
 absl-py = [
