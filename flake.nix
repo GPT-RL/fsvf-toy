@@ -22,8 +22,15 @@
       inherit (pkgs.linuxPackages) nvidia_x11;
       inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
       poetryArgs = {
-        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
+        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: let
+          args = old: {
+            buildInputs = (old.buildInputs or []) ++ [pyfinal.poetry];
+          };
+        in {
           jaxlib = pyprev.jaxlibWithCuda;
+          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs args;
+          run-logger = pyprev.run-logger.overridePythonAttrs args;
+          pytypeclass = pyprev.pytypeclass.overridePythonAttrs args;
         });
         projectDir = ./.;
         python = pkgs.python39;
