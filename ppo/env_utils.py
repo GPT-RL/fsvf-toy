@@ -16,11 +16,11 @@
 
 import collections
 
-import atari_py  # build-cleaner: keep
+# import atari_py  # build-cleaner: keep
 import gym
 import numpy as np
 
-import seed_rl_atari_preprocessing
+# import seed_rl_atari_preprocessing
 
 
 class ClipRewardEnv(gym.RewardWrapper):
@@ -44,7 +44,7 @@ class FrameStack:
     """
 
     def __init__(
-        self, preproc: seed_rl_atari_preprocessing.AtariPreprocessing, num_frames: int
+        self, preproc: "seed_rl_atari_preprocessing.AtariPreprocessing", num_frames: int
     ):
         self.preproc = preproc
         self.num_frames = num_frames
