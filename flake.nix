@@ -79,7 +79,11 @@
               args = {
                 inherit (pyfinal) buildPythonPackage fetchPypi;
               };
+              flit-core = import ./nixfiles/flit-core.nix args;
             in rec {
+              jax = pyprev.jax.overrideAttrs (old: {
+                buildInputs = old.buildInputs;
+              });
               #gym-minigrid = import ./nixfiles/gym-minigrid.nix args;
             });
 
