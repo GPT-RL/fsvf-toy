@@ -2,7 +2,7 @@ import jaxlib
 import jax
 
 def main():
-    print("HELLO")
+    print(jax.devices())
 
 
 if __name__ == '__main__':
