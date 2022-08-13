@@ -12,32 +12,24 @@
     utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        config.allowUnfree = true;
-        config.cudaSupport = true;
+        config = {
+          allowUnfree = true;
+          cudaSupport = true;
+        };
       };
       inherit (pkgs) poetry2nix;
       inherit (pkgs.cudaPackages) cudatoolkit;
       inherit (pkgs.linuxPackages) nvidia_x11;
+      inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
       poetryArgs = {
         overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
-          etils = pyprev.etils.overridePythonAttrs (
-            old: {
-              src = pkgs.fetchFromGitHub {
-                owner = "ethanabrooks";
-                repo = "etils";
-                rev = "main";
-                sha256 = "sha256-GCj4EbznWlGvR0Y3NDFvrjFgnBXbMvokxRiTt9MycFI=";
-              };
-              buildInputs = (old.buildInputs) ++ [pyfinal.poetry];
-            }
-          );
           jaxlib = pyprev.jaxlibWithCuda;
         });
         projectDir = ./.;
         python = pkgs.python39;
       };
-      poetryApp = poetry2nix.mkPoetryApplication poetryArgs;
-      poetryEnv = poetry2nix.mkPoetryEnv poetryArgs;
+      poetryApp = mkPoetryApplication poetryArgs;
+      poetryEnv = mkPoetryEnv poetryArgs;
     in {
       devShell = pkgs.mkShell rec {
         buildInputs = with pkgs; [
@@ -48,8 +40,8 @@
           pre-commit
         ];
         shellHook = ''
-          export pythonfaulthandler=1
-          export pythonbreakpoint=ipdb.set_trace
+          export PYTHONFAULTHANDLER=1
+          export PYTHONBREAKPOINT=ipdb.set_trace
           set -o allexport
           source .env
           set +o allexport
