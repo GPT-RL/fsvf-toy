@@ -8,6 +8,7 @@ authors = ["Ethan Brooks <ethanabrooks@gmail.com>"]
 python = "^3.9"
 jaxlib = { extras = ["cuda"], version = "0.3.0" }
 gym = "^0.25.1"
+gym-minigrid = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
 
