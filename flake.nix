@@ -21,12 +21,13 @@
       inherit (pkgs.cudaPackages) cudatoolkit;
       inherit (pkgs.linuxPackages) nvidia_x11;
       inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
-      poetryArgs = {
+      poetryArgs = rec {
         overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: let
           args = old: {
             buildInputs = (old.buildInputs or []) ++ [pyfinal.poetry];
           };
         in {
+          dm-tree = python.pkgs.dm-tree;
           jaxlib = pyprev.jaxlibWithCuda;
           dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs args;
           run-logger = pyprev.run-logger.overridePythonAttrs args;
