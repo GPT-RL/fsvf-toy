@@ -12,31 +12,40 @@
     utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
+        config.allowUnfree = true;
       };
-      python = pkgs.python39;
       inherit (pkgs) poetry2nix;
-      poetryApp =
-        poetry2nix.mkPoetryApplication
-        {
-          inherit python;
-          projectDir = ./.;
-          overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
-            etils = pyprev.etils.overridePythonAttrs (
-              old: {
-                src = pkgs.fetchFromGitHub {
-                  owner = "ethanabrooks";
-                  repo = "etils";
-                  rev = "main";
-                  sha256 = "sha256-GCj4EbznWlGvR0Y3NDFvrjFgnBXbMvokxRiTt9MycFI=";
-                };
-                buildInputs = (old.buildInputs) ++ [pyfinal.poetry];
-              }
-            );
-          });
-        };
+      inherit (pkgs.cudaPackages) cudatoolkit;
+      inherit (pkgs.linuxPackages) nvidia_x11;
+      poetryArgs = {
+        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
+          etils = pyprev.etils.overridePythonAttrs (
+            old: {
+              src = pkgs.fetchFromGitHub {
+                owner = "ethanabrooks";
+                repo = "etils";
+                rev = "main";
+                sha256 = "sha256-GCj4EbznWlGvR0Y3NDFvrjFgnBXbMvokxRiTt9MycFI=";
+              };
+              buildInputs = (old.buildInputs) ++ [pyfinal.poetry];
+            }
+          );
+          jaxlib = pyprev.jaxlibWithCuda;
+        });
+        projectDir = ./.;
+        python = pkgs.python39;
+      };
+      poetryApp = poetry2nix.mkPoetryApplication poetryArgs;
+      poetryEnv = poetry2nix.mkPoetryEnv poetryArgs;
     in {
       devShell = pkgs.mkShell rec {
-        buildInputs = with pkgs; [poetry pre-commit];
+        buildInputs = with pkgs; [
+          cudatoolkit
+          nvidia_x11
+          poetry
+          poetryEnv
+          pre-commit
+        ];
       };
       packages.default = poetryApp;
     });

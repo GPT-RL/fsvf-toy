@@ -6,7 +6,7 @@ authors = ["Ethan Brooks <ethanabrooks@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-jaxlib = { extras = ["cuda"], version = "0.3.15" }
+jaxlib = { version = "0.3.0" }
 jax = "^0.3.0"
 
 [tool.poetry.dev-dependencies]
