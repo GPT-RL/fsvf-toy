@@ -13,6 +13,7 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
+        config.cudaSupport = true;
       };
       inherit (pkgs) poetry2nix;
       inherit (pkgs.cudaPackages) cudatoolkit;
@@ -46,6 +47,17 @@
           poetryEnv
           pre-commit
         ];
+        shellHook = ''
+          export pythonfaulthandler=1
+          export pythonbreakpoint=ipdb.set_trace
+          set -o allexport
+          source .env
+          set +o allexport
+          export CUDA_PATH=${cudatoolkit.lib}
+          export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
+          export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
+          export EXTRA_CCFLAGS="-i/usr/include"
+        '';
       };
       packages.default = poetryApp;
     });
