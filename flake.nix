@@ -15,13 +15,12 @@
       inherit (pkgs) poetry2nix;
       inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
       poetryArgs = {
-        overrides =
-          poetry2nix.overrides.withDefaults
-          (pyfinal: pyprev: {
-            tensorflow = python.pkgs.tensorflow;
-          });
+        inherit python;
+        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: {
+          jaxlib = pyprev.jaxlibWithCuda;
+          tensorflow = python.pkgs.tensorflow;
+        });
         projectDir = ./.;
-        python = pkgs.python39;
       };
       poetryEnv = mkPoetryEnv poetryArgs;
     in {
