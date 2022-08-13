@@ -31,6 +31,7 @@
               inherit (pyfinal) pytypeclass;
               inherit (pkgs) lib;
             });
+          gym-notices = import ./nixfiles/gym-notices.nix args;
           pytypeclass = import ./nixfiles/pytypeclass.nix args;
           #tensorflow_datasets =
           #import ./nixfiles/tensorflow-datasets.nix (args
