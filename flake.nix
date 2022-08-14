@@ -23,6 +23,45 @@
       inherit (pkgs.linuxPackages) nvidia_x11;
       python = pkgs.python39;
       overrides = pyfinal: pyprev: rec {
+        clu = pyprev.buildPythonPackage rec {
+          pname = "clu";
+          version = "0.0.7";
+          src = pyprev.fetchPypi {
+            inherit pname version;
+            sha256 = "sha256-RJqa8XnDpcRPwYlH+4RKAOos0x4+3hMWf/bv6JNn2ys=";
+          };
+          buildInputs = with pyfinal; [
+            absl-py
+            etils
+            flax
+            jax
+            jaxlib
+            ml-collections
+            numpy
+            packaging
+            tensorflow
+            tensorflow-datasets
+          ];
+        };
+        ml-collections = (pyprev.buildPythonPackage
+          rec {
+            pname = "ml_collections";
+            version = "0.1.1";
+            src = pyprev.fetchPypi {
+              inherit pname version;
+              sha256 = "sha256-P+/McuxDOqHl0yMHo+R0u7Z/QFvoFOpSohZr/J2+aMw=";
+            };
+            buildInputs = with pyfinal; [
+              absl-py
+              contextlib2
+              pyyaml
+              six
+            ];
+            prePatch = ''
+              export HOME=$TMPDIR;
+            '';
+          })
+        .overridePythonAttrs (old: {doCheck = false;});
         tensorflow-gpu =
           # Override the nixpkgs bin version instead of
           # poetry2nix version so that rpath is set correctly.
