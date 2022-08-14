@@ -16,16 +16,14 @@
 # pytype: disable=wrong-keyword-args
 
 from pathlib import Path
-from absl import app
-from absl import flags
 import yaml
 
 import tensorflow as tf
 from dollar_lambda import command
 
-import env_utils
-import models
-import ppo_lib
+from ppo import env_utils
+from ppo import models
+from ppo import ppo_lib
 
 
 @command()
@@ -47,4 +45,4 @@ def main(config_path: Path = Path("config.yml")):
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

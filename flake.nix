@@ -23,6 +23,9 @@
       inherit (pkgs.linuxPackages) nvidia_x11;
       python = pkgs.python39;
       overrides = pyfinal: pyprev: rec {
+        astunparse = pyprev.astunparse.overridePythonAttrs (old: {
+          buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
+        });
         clu = pyprev.buildPythonPackage rec {
           pname = "clu";
           version = "0.0.7";
@@ -42,6 +45,17 @@
             tensorflow
             tensorflow-datasets
           ];
+        };
+        # Use cuda-enabled jaxlib as required
+        jaxlib = pyprev.jaxlibWithCuda.override {
+          inherit
+            (pyprev)
+            absl-py
+            flatbuffers
+            numpy
+            scipy
+            six
+            ;
         };
         ml-collections =
           pyprev.buildPythonPackage
@@ -67,20 +81,6 @@
           # poetry2nix version so that rpath is set correctly.
           pyprev.tensorflow-bin.overridePythonAttrs
           (old: {inherit (pyprev.tensorflow-gpu) src version;});
-        astunparse = pyprev.astunparse.overridePythonAttrs (old: {
-          buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
-        });
-        # Use cuda-enabled jaxlib as required
-        jaxlib = pyprev.jaxlibWithCuda.override {
-          inherit
-            (pyprev)
-            absl-py
-            flatbuffers
-            numpy
-            scipy
-            six
-            ;
-        };
       };
       poetryArgs = {
         inherit python;

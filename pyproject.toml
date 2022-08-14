@@ -20,7 +20,7 @@ ipdb = "^0.13.9"
 ipython = "^8.4.0"
 
 [tool.poetry.scripts]
-main = 'ppo:main'
+main = 'ppo:ppo_main.main'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -16,11 +16,9 @@
 
 import collections
 
-import atari_py  # build-cleaner: keep
 import gym
 import numpy as np
 
-import seed_rl_atari_preprocessing
 
 class ClipRewardEnv(gym.RewardWrapper):
   """Adapted from OpenAI baselines.
