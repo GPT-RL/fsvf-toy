@@ -1,52 +1,124 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    utils.url = "github:numtide/flake-utils";
+    utils = {
+      url = "github:numtide/flake-utils";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
     utils,
-  }:
-    utils.lib.eachDefaultSystem (system: let
+  }: let
+    out = system: let
       pkgs = import nixpkgs {
         inherit system;
-        config = {
-          allowUnfree = true;
-          cudaSupport = true;
-        };
+        config.cudaSupport = true;
+        config.allowUnfree = true;
+        overlays = [
+          (final: prev: {
+            # Reassigning python3 to python39 so that arrow-cpp
+            # will be built using it.
+            python3 = prev.python39.override {
+              packageOverrides = pyfinal: pyprev: {
+                # Dependency of arrow-cpp
+                # Work-around for PyOpenSSL marked as broken on aarch64-darwin
+                # See: https://github.com/NixOS/nixpkgs/pull/172397,
+                # https://github.com/pyca/pyopenssl/issues/87
+                pyopenssl =
+                  pyprev.pyopenssl.overridePythonAttrs
+                  (old: {meta.broken = false;});
+
+                # Twisted currently fails tests because of pyopenssl
+                # (see linked issues above)
+                twisted = pyprev.buildPythonPackage {
+                  pname = "twisted";
+                  version = "22.4.0";
+                  format = "wheel";
+                  src = final.fetchurl {
+                    url = "https://files.pythonhosted.org/packages/db/99/38622ff95bb740bcc991f548eb46295bba62fcb6e907db1987c4d92edd09/Twisted-22.4.0-py3-none-any.whl";
+                    sha256 = "sha256-+fepH5STJHep/DsWnVf1T5bG50oj142c5UA5p/SJKKI=";
+                  };
+                  propagatedBuildInputs = with pyfinal; [
+                    automat
+                    constantly
+                    hyperlink
+                    incremental
+                    setuptools
+                    typing-extensions
+                    zope_interface
+                  ];
+                };
+              };
+            };
+            thrift = prev.thrift.overrideAttrs (old: {
+              # Concurrency test fails on Darwin
+              # TInterruptTest, TNonblockingSSLServerTest
+              # SecurityTest, and SecurityFromBufferTest
+              # fail on Linux.
+              doCheck = false;
+            });
+          })
+        ];
       };
-      inherit (pkgs) poetry2nix;
+      inherit (pkgs) poetry2nix lib stdenv fetchurl;
       inherit (pkgs.cudaPackages) cudatoolkit;
       inherit (pkgs.linuxPackages) nvidia_x11;
-      inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
-      poetryArgs = rec {
-        overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: let
-          args = old: {
-            buildInputs = (old.buildInputs or []) ++ [pyfinal.poetry];
-          };
-        in {
-          dm-tree = python.pkgs.dm-tree;
-          jaxlib = pyprev.jaxlibWithCuda;
-          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs args;
-          run-logger = pyprev.run-logger.overridePythonAttrs args;
-          pytypeclass = pyprev.pytypeclass.overridePythonAttrs args;
-        });
+      python = pkgs.python39;
+      pythonEnv = poetry2nix.mkPoetryEnv {
+        inherit python;
         projectDir = ./.;
-        python = pkgs.python39;
+        preferWheels = true;
+        overrides =
+          poetry2nix.overrides.withDefaults
+          (pyfinal: pyprev: rec {
+            # inherit (python.pkgs) apache-beam;
+            # Use tensorflow-gpu on linux
+            #tensorflow-gpu =
+            ## Override the nixpkgs bin version instead of
+            ## poetry2nix version so that rpath is set correctly.
+            #pyprev.tensorflow-bin.overridePythonAttrs
+            #(old: {inherit (pyprev.tensorflow-gpu) src version;});
+            # Use tensorflow-macos on macOS
+            #astunparse = pyprev.astunparse.overridePythonAttrs (old: {
+            #buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
+            #});
+            # Use cuda-enabled jaxlib as required
+            jaxlib =
+              # Override the nixpkgs bin version instead of
+              # poetry2nix version so that rpath is set correctly.
+              pyprev.jaxlib-bin.overridePythonAttrs (old: {
+                inherit (old) pname version;
+                src = fetchurl {
+                  url = "https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.3.10+cuda11.cudnn82-cp39-none-manylinux2014_x86_64.whl";
+                  sha256 = "sha256-ccmqJ++93I8eKCm3/GUhvJC9NTpBKb7HBp/TGoqdWT4=";
+                };
+              });
+            orjson = python.pkgs.orjson.override {
+              inherit (python) pythonOlder;
+              inherit
+                (pyprev)
+                pytestCheckHook
+                buildPythonPackage
+                numpy
+                psutil
+                python-dateutil
+                pytz
+                xxhash
+                ;
+            };
+            protobuf = pyprev.protobuf.overridePythonAttrs (old: {
+              propagatedBuildInputs =
+                (old.propagatedBuildInputs or [])
+                ++ [pkgs.protobuf];
+            });
+          });
       };
-      poetryApp = mkPoetryApplication poetryArgs;
-      poetryEnv = mkPoetryEnv poetryArgs;
     in {
-      devShell = pkgs.mkShell rec {
-        buildInputs = with pkgs; [
-          cudatoolkit
-          nvidia_x11
-          poetry
-          poetryEnv
-          pre-commit
-        ];
+      devShell = pkgs.mkShell {
+        buildInputs = [pythonEnv nvidia_x11 cudatoolkit];
         shellHook = ''
           export PYTHONFAULTHANDLER=1
           export PYTHONBREAKPOINT=ipdb.set_trace
@@ -59,6 +131,7 @@
           export EXTRA_CCFLAGS="-i/usr/include"
         '';
       };
-      packages.default = poetryApp;
-    });
+    };
+  in
+    with utils.lib; eachSystem defaultSystems out;
 }
