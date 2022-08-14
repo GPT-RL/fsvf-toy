@@ -13,6 +13,7 @@ jax = "0.3.6"
 #run-logger = "^0.1.8"
 #dm-tree = "unstable-2021-12-20"
 #flax = "^0.5.3"
+tensorflow-gpu = "^2.9.1"
 
 [tool.poetry.dev-dependencies]
 
