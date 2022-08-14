@@ -8,16 +8,8 @@ authors = ["Ethan Brooks <ethanabrooks@gmail.com>"]
 python = ">=3.8,<4.0"
 jaxlib = "0.3.0"
 jax = "0.3.6"
-#gym-minigrid = "^1.1.0"
-#dollar-lambda = "^1.1.4"
-#run-logger = "^0.1.8"
-#dm-tree = "unstable-2021-12-20"
-#flax = "^0.5.3"
 
 [tool.poetry.dev-dependencies]
-
-[tool.poetry.scripts]
-main = 'ppo:main'
 
 [build-system]
 requires = ["poetry>=0.12"]

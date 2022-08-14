@@ -12,15 +12,9 @@
     utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        #config = {
-        #allowUnfree = true;
-        #cudaSupport = true;
-        #};
       };
       inherit (pkgs) poetry2nix;
-      #inherit (pkgs.cudaPackages) cudatoolkit;
-      #inherit (pkgs.linuxPackages) nvidia_x11;
-      inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
+      inherit (poetry2nix) mkPoetryEnv;
       poetryArgs = rec {
         overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: let
           poetryArgs = old: {
@@ -39,8 +33,7 @@
               wrapt
               ;
           };
-          #dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs poetryArgs;
-          jaxlib = pyprev.jaxlibWithCuda.override {
+          jaxlib = pyprev.jaxlib.override {
             inherit
               (pyprev)
               absl-py
@@ -50,41 +43,29 @@
               six
               ;
           };
-          #run-logger = pyprev.run-logger.overridePythonAttrs poetryArgs;
-          #pytypeclass = pyprev.pytypeclass.overridePythonAttrs poetryArgs;
-          setuptools-scm = import ./nixfiles/setuptools-scm.nix {
-            inherit
-              (pyprev)
-              buildPythonPackage
-              fetchPypi
+          setuptools-scm = pyprev.buildPythonPackage rec {
+            pname = "setuptools_scm";
+            version = "7.0.5";
+            src = pyprev.fetchPypi {
+              inherit pname version;
+              sha256 = "sha256-Ax4Tr3cdb4krlBrbbqBFRbv5Hrxc5ox4qvP/9uH7SEQ=";
+            };
+            buildInputs = with pyprev; [
               packaging
-              pytest
               tomli
               typing-extensions
-              ;
+              pytest
+            ];
           };
-          #tensorstore = import ./nixfiles/tensorstore.nix {
-          #inherit
-          #(pyprev)
-          #buildPythonPackage
-          #fetchPypi
-          #numpy
-          #setuptools-scm
-          #;
-          #};
         });
         projectDir = ./.;
         python = pkgs.python39;
       };
-      poetryApp = mkPoetryApplication poetryArgs;
+      poetryApp = poetryArgs;
       poetryEnv = mkPoetryEnv poetryArgs;
     in {
       devShell = pkgs.mkShell rec {
-        buildInputs = with pkgs; [
-          poetry
-          poetryEnv
-        ];
+        buildInputs = with pkgs; [poetryEnv];
       };
-      packages.default = poetryApp;
     });
 }
