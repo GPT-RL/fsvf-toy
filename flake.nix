@@ -22,35 +22,33 @@
       inherit (pkgs.cudaPackages) cudatoolkit;
       inherit (pkgs.linuxPackages) nvidia_x11;
       python = pkgs.python39;
+      overrides = pyfinal: pyprev: rec {
+        tensorflow-gpu =
+          # Override the nixpkgs bin version instead of
+          # poetry2nix version so that rpath is set correctly.
+          pyprev.tensorflow-bin.overridePythonAttrs
+          (old: {inherit (pyprev.tensorflow-gpu) src version;});
+        astunparse = pyprev.astunparse.overridePythonAttrs (old: {
+          buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
+        });
+        # Use cuda-enabled jaxlib as required
+        jaxlib = pyprev.jaxlibWithCuda.override {
+          inherit
+            (pyprev)
+            absl-py
+            flatbuffers
+            numpy
+            scipy
+            six
+            ;
+        };
+      };
       poetryArgs = {
         inherit python;
         projectDir = ./.;
         preferWheels = true;
-        overrides =
-          poetry2nix.overrides.withDefaults
-          (pyfinal: pyprev: rec {
-            tensorflow-gpu =
-              # Override the nixpkgs bin version instead of
-              # poetry2nix version so that rpath is set correctly.
-              pyprev.tensorflow-bin.overridePythonAttrs
-              (old: {inherit (pyprev.tensorflow-gpu) src version;});
-            astunparse = pyprev.astunparse.overridePythonAttrs (old: {
-              buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
-            });
-            # Use cuda-enabled jaxlib as required
-            jaxlib = pyprev.jaxlibWithCuda.override {
-              inherit
-                (pyprev)
-                absl-py
-                flatbuffers
-                numpy
-                scipy
-                six
-                ;
-            };
-          });
+        overrides = poetry2nix.overrides.withDefaults overrides;
       };
-      poetryApp = mkPoetryApplication poetryArgs;
       poetryEnv = mkPoetryEnv poetryArgs;
     in {
       devShell = pkgs.mkShell rec {
@@ -73,7 +71,7 @@
           export EXTRA_CCFLAGS="-i/usr/include"
         '';
       };
-      packages.default = poetryApp;
+      packages.default = mkPoetryApplication poetryArgs;
     };
   in
     utils.lib.eachDefaultSystem out;
