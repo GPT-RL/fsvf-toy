@@ -23,15 +23,60 @@
       inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
       poetryArgs = rec {
         overrides = poetry2nix.overrides.withDefaults (pyfinal: pyprev: let
-          args = old: {
+          poetryArgs = old: {
             buildInputs = (old.buildInputs or []) ++ [pyfinal.poetry];
           };
         in {
-          dm-tree = python.pkgs.dm-tree;
-          jaxlib = pyprev.jaxlibWithCuda;
-          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs args;
-          run-logger = pyprev.run-logger.overridePythonAttrs args;
-          pytypeclass = pyprev.pytypeclass.overridePythonAttrs args;
+          #dm-tree = python.pkgs.dm-tree.override {
+          #abseil-cpp
+          #cmake
+          #fetchFromGitHub
+          #lib
+          #inherit
+          #(pyprev)
+          #stdenv
+          ##absl-py
+
+          #attrs
+          #buildPythonPackage
+          #numpy
+          #pybind11
+          #wrapt
+          #;
+          #};
+          jaxlib = pyprev.jaxlibWithCuda.override {
+            inherit
+              (pyprev)
+              absl-py
+              flatbuffers
+              numpy
+              scipy
+              six
+              ;
+          };
+          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs poetryArgs;
+          run-logger = pyprev.run-logger.overridePythonAttrs poetryArgs;
+          pytypeclass = pyprev.pytypeclass.overridePythonAttrs poetryArgs;
+          #setuptools-scm = import ./nixfiles/setuptools-scm.nix {
+          #inherit
+          #(pyfinal)
+          #buildPythonPackage
+          #fetchPypi
+          #packaging
+          #pytest
+          #tomli
+          #typing-extensions
+          #;
+          #};
+          #tensorstore = import ./nixfiles/tensorstore.nix {
+          #inherit
+          #(pyfinal)
+          #buildPythonPackage
+          #fetchPypi
+          #numpy
+          #setuptools-scm
+          #;
+          #};
         });
         projectDir = ./.;
         python = pkgs.python39;
