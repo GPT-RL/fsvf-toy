@@ -61,6 +61,14 @@ numpy = ">=1.18.0"
 toolz = ">=0.9.0"
 
 [[package]]
+name = "cloudpickle"
+version = "2.1.0"
+description = "Extended pickling support for Python objects"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "colorama"
 version = "0.4.5"
 description = "Cross-platform colored terminal text."
@@ -214,6 +222,56 @@ six = ">=1.5.2"
 
 [package.extras]
 protobuf = ["grpcio-tools (>=1.48.0)"]
+
+[[package]]
+name = "gym"
+version = "0.25.1"
+description = "Gym: A universal API for reinforcement learning environments"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+cloudpickle = ">=1.2.0"
+gym_notices = ">=0.0.4"
+importlib_metadata = {version = ">=4.8.0", markers = "python_version < \"3.10\""}
+numpy = ">=1.18.0"
+
+[package.extras]
+accept-rom-license = ["autorom[accept-rom-license] (>=0.4.2,<0.5.0)"]
+all = ["lz4 (>=3.1.0)", "pytest (==7.0.1)", "imageio (>=2.14.1)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "box2d-py (==2.3.5)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "matplotlib (>=3.0)", "ale-py (>=0.7.5,<0.8.0)"]
+atari = ["ale-py (>=0.7.5,<0.8.0)"]
+box2d = ["box2d-py (==2.3.5)", "pygame (==2.1.0)"]
+classic_control = ["pygame (==2.1.0)"]
+mujoco = ["mujoco (==2.2.0)", "imageio (>=2.14.1)"]
+mujoco_py = ["mujoco_py (>=2.1,<2.2)"]
+other = ["lz4 (>=3.1.0)", "opencv-python (>=3.0)", "matplotlib (>=3.0)"]
+testing = ["lz4 (>=3.1.0)", "imageio (>=2.14.1)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "box2d-py (==2.3.5)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "matplotlib (>=3.0)", "pytest (==7.0.1)"]
+toy_text = ["pygame (==2.1.0)"]
+
+[[package]]
+name = "gym-minigrid"
+version = "1.1.0"
+description = "Minimalistic gridworld reinforcement learning environments"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+gym = ">=0.22,<=0.26"
+matplotlib = ">=3.0"
+numpy = ">=1.18.0"
+
+[package.extras]
+testing = ["pytest (==7.0.1)"]
+
+[[package]]
+name = "gym-notices"
+version = "0.0.8"
+description = "Notices for gym"
+category = "main"
+optional = false
+python-versions = "*"
 
 [[package]]
 name = "h5py"
@@ -797,7 +855,7 @@ docs = ["jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "jaraco.packaging (>=9)
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "2be301fbe8da26bca4d827f720c7345f88f52e191b55a5871fd944f94a5233a0"
+content-hash = "86cffb9fcf871f2cce59db3476d39e6384cd5a070e4efd65cc16827ab2ee76cc"
 
 [metadata.files]
 absl-py = [
@@ -823,6 +881,10 @@ charset-normalizer = [
 chex = [
     {file = "chex-0.1.4-py3-none-any.whl", hash = "sha256:432395fceacdafc78a9cc8c56c98200d8247db6535bca83ffaecd61e16e4d9b6"},
     {file = "chex-0.1.4.tar.gz", hash = "sha256:c490fdadc7153d41f00114d671b079e64dae68028465a936d59f1030bb38abe9"},
+]
+cloudpickle = [
+    {file = "cloudpickle-2.1.0-py3-none-any.whl", hash = "sha256:b5c434f75c34624eedad3a14f2be5ac3b5384774d5b0e3caf905c21479e6c4b1"},
+    {file = "cloudpickle-2.1.0.tar.gz", hash = "sha256:bb233e876a58491d9590a676f93c7a5473a08f747d5ab9df7f9ce564b3e7938e"},
 ]
 colorama = [
     {file = "colorama-0.4.5-py2.py3-none-any.whl", hash = "sha256:854bf444933e37f5824ae7bfc1e98d5bce2ebe4160d46b5edf346a89358e99da"},
@@ -936,6 +998,17 @@ grpcio = [
     {file = "grpcio-1.48.0-cp39-cp39-win32.whl", hash = "sha256:ce70254a082cb767217b2fdee374cc79199d338d46140753438cd6d67c609b2f"},
     {file = "grpcio-1.48.0-cp39-cp39-win_amd64.whl", hash = "sha256:ae3fd135666448058fe277d93c10e0f18345fbcbb015c4642de2fa3db6f0c205"},
     {file = "grpcio-1.48.0.tar.gz", hash = "sha256:eaf4bb73819863440727195411ab3b5c304f6663625e66f348e91ebe0a039306"},
+]
+gym = [
+    {file = "gym-0.25.1.tar.gz", hash = "sha256:26809d60d654215956a1642bba344a765c934a0a65a5a07208caa0a97f4eb0ec"},
+]
+gym-minigrid = [
+    {file = "gym_minigrid-1.1.0-py3-none-any.whl", hash = "sha256:d00d632eafd686d022c7c05ade57b1206eb2eef7592e3ae8d2f922deada27b0e"},
+    {file = "gym_minigrid-1.1.0.tar.gz", hash = "sha256:3971e1d8c306b8da5ef588707fea2e0eb16a7570a6089ec7b5c758dec4224ea9"},
+]
+gym-notices = [
+    {file = "gym-notices-0.0.8.tar.gz", hash = "sha256:ad25e200487cafa369728625fe064e88ada1346618526102659b4640f2b4b911"},
+    {file = "gym_notices-0.0.8-py3-none-any.whl", hash = "sha256:e5f82e00823a166747b4c2a07de63b6560b1acb880638547e0cabf825a01e463"},
 ]
 h5py = [
     {file = "h5py-3.7.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d77af42cb751ad6cc44f11bae73075a07429a5cf2094dfde2b1e716e059b3911"},
