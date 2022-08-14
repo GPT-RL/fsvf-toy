@@ -15,39 +15,36 @@
 # See issue #620.
 # pytype: disable=wrong-keyword-args
 
+from pathlib import Path
 from absl import app
 from absl import flags
-from ml_collections import config_flags
+import yaml
+
 import tensorflow as tf
+from dollar_lambda import command
 
 import env_utils
 import models
 import ppo_lib
 
 
-FLAGS = flags.FLAGS
+@command()
+def main(config_path: Path = Path("config.yml")):
+    # Make sure tf does not allocate gpu memory.
+    tf.config.experimental.set_visible_devices([], "GPU")
+    # config = FLAGS.config
+    with config_path.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
-flags.DEFINE_string(
-    'workdir',
-    default='/tmp/ppo_training',
-    help=('Directory to save checkpoints and logging info.'))
+    def _main(game: str, **kwargs):
+        game = config.game + "NoFrameskip-v4"
+        num_actions = env_utils.get_num_actions(game)
+        print(f"Playing {game} with {num_actions} actions")
+        model = models.ActorCritic(num_outputs=num_actions)
+        return ppo_lib.train(model, **kwargs)
 
-config_flags.DEFINE_config_file(
-    'config',
-    "configs/default.py",
-    'File path to the default configuration file.',
-    lock_config=True)
+    return _main(**config)
 
 
-def main(argv):
-  # Make sure tf does not allocate gpu memory.
-  tf.config.experimental.set_visible_devices([], 'GPU')
-  config = FLAGS.config
-  game = config.game + 'NoFrameskip-v4'
-  num_actions = env_utils.get_num_actions(game)
-  print(f'Playing {game} with {num_actions} actions')
-  model = models.ActorCritic(num_outputs=num_actions)
-  ppo_lib.train(model, config, FLAGS.workdir)
-
-if __name__ == '__main__':
-  app.run(main)
+if __name__ == "__main__":
+    app.run(main)
