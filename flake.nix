@@ -27,23 +27,19 @@
             buildInputs = (old.buildInputs or []) ++ [pyfinal.poetry];
           };
         in {
-          #dm-tree = python.pkgs.dm-tree.override {
-          #abseil-cpp
-          #cmake
-          #fetchFromGitHub
-          #lib
-          #inherit
-          #(pyprev)
-          #stdenv
-          ##absl-py
-
-          #attrs
-          #buildPythonPackage
-          #numpy
-          #pybind11
-          #wrapt
-          #;
-          #};
+          dm-tree = python.pkgs.dm-tree.override {
+            inherit
+              (pyprev)
+              stdenv
+              absl-py
+              attrs
+              buildPythonPackage
+              numpy
+              pybind11
+              wrapt
+              ;
+          };
+          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs poetryArgs;
           jaxlib = pyprev.jaxlibWithCuda.override {
             inherit
               (pyprev)
@@ -54,29 +50,28 @@
               six
               ;
           };
-          dollar-lambda = pyprev.dollar-lambda.overridePythonAttrs poetryArgs;
           run-logger = pyprev.run-logger.overridePythonAttrs poetryArgs;
           pytypeclass = pyprev.pytypeclass.overridePythonAttrs poetryArgs;
-          #setuptools-scm = import ./nixfiles/setuptools-scm.nix {
-          #inherit
-          #(pyfinal)
-          #buildPythonPackage
-          #fetchPypi
-          #packaging
-          #pytest
-          #tomli
-          #typing-extensions
-          #;
-          #};
-          #tensorstore = import ./nixfiles/tensorstore.nix {
-          #inherit
-          #(pyfinal)
-          #buildPythonPackage
-          #fetchPypi
-          #numpy
-          #setuptools-scm
-          #;
-          #};
+          setuptools-scm = import ./nixfiles/setuptools-scm.nix {
+            inherit
+              (pyprev)
+              buildPythonPackage
+              fetchPypi
+              packaging
+              pytest
+              tomli
+              typing-extensions
+              ;
+          };
+          tensorstore = import ./nixfiles/tensorstore.nix {
+            inherit
+              (pyprev)
+              buildPythonPackage
+              fetchPypi
+              numpy
+              setuptools-scm
+              ;
+          };
         });
         projectDir = ./.;
         python = pkgs.python39;
