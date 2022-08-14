@@ -86,34 +86,16 @@
               buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
             });
             # Use cuda-enabled jaxlib as required
-            jaxlib =
-              # Override the nixpkgs bin version instead of
-              # poetry2nix version so that rpath is set correctly.
-              pyprev.jaxlib-bin.overridePythonAttrs (old: {
-                inherit (old) pname version;
-                src = fetchurl {
-                  url = "https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.3.10+cuda11.cudnn82-cp39-none-manylinux2014_x86_64.whl";
-                  sha256 = "sha256-ccmqJ++93I8eKCm3/GUhvJC9NTpBKb7HBp/TGoqdWT4=";
-                };
-              });
-            orjson = python.pkgs.orjson.override {
-              inherit (python) pythonOlder;
+            jaxlib = pyprev.jaxlibWithCuda.override {
               inherit
                 (pyprev)
-                pytestCheckHook
-                buildPythonPackage
+                absl-py
+                flatbuffers
                 numpy
-                psutil
-                python-dateutil
-                pytz
-                xxhash
+                scipy
+                six
                 ;
             };
-            protobuf = pyprev.protobuf.overridePythonAttrs (old: {
-              propagatedBuildInputs =
-                (old.propagatedBuildInputs or [])
-                ++ [pkgs.protobuf];
-            });
           });
       };
     in {
