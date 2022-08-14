@@ -43,7 +43,8 @@
             tensorflow-datasets
           ];
         };
-        ml-collections = (pyprev.buildPythonPackage
+        ml-collections =
+          pyprev.buildPythonPackage
           rec {
             pname = "ml_collections";
             version = "0.1.1";
@@ -60,8 +61,7 @@
             prePatch = ''
               export HOME=$TMPDIR;
             '';
-          })
-        .overridePythonAttrs (old: {doCheck = false;});
+          };
         tensorflow-gpu =
           # Override the nixpkgs bin version instead of
           # poetry2nix version so that rpath is set correctly.
