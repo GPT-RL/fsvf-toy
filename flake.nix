@@ -29,14 +29,11 @@
         overrides =
           poetry2nix.overrides.withDefaults
           (pyfinal: pyprev: rec {
-            # inherit (python.pkgs) apache-beam;
-            # Use tensorflow-gpu on linux
             tensorflow-gpu =
               # Override the nixpkgs bin version instead of
               # poetry2nix version so that rpath is set correctly.
               pyprev.tensorflow-bin.overridePythonAttrs
               (old: {inherit (pyprev.tensorflow-gpu) src version;});
-            #Use tensorflow-macos on macOS
             astunparse = pyprev.astunparse.overridePythonAttrs (old: {
               buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
             });
