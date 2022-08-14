@@ -97,6 +97,7 @@
           poetry
           poetryEnv
           pre-commit
+          nodePackages.prettier
         ];
         shellHook = ''
           export PYTHONFAULTHANDLER=1
