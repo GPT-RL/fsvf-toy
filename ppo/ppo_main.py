@@ -24,21 +24,20 @@ from dollar_lambda import command
 from ppo import env_utils
 from ppo import models
 from ppo import ppo_lib
+from gym_minigrid.minigrid import MiniGridEnv
 
 
 @command()
 def main(config_path: Path = Path("config.yml")):
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
-    # config = FLAGS.config
     with config_path.open() as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    def _main(env_id: str, **kwargs):
-        num_actions = env_utils.get_num_actions(env_id)
-        print(f"Playing {env_id} with {num_actions} actions")
+    def _main(**kwargs):
+        num_actions = len(MiniGridEnv.Actions)
         model = models.ActorCritic(num_outputs=num_actions)
-        return ppo_lib.train(model, env_id=env_id, **kwargs)
+        return ppo_lib.train(model, **kwargs)
 
     return _main(**config)
 
