@@ -1,10 +1,12 @@
 import jaxlib
 import jax
 import tensorflow as tf
+
 # import gym_minigrid
 # import gym
 # import tree
 from pprint import pprint
+
 
 def main():
     pprint(tf.config.list_physical_devices())
@@ -16,5 +18,5 @@ def main():
     # print(env.render("rgb_array"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

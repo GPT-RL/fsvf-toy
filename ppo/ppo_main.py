@@ -34,12 +34,11 @@ def main(config_path: Path = Path("config.yml")):
     with config_path.open() as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    def _main(game: str, **kwargs):
-        game = config.game + "NoFrameskip-v4"
-        num_actions = env_utils.get_num_actions(game)
-        print(f"Playing {game} with {num_actions} actions")
+    def _main(env_id: str, **kwargs):
+        num_actions = env_utils.get_num_actions(env_id)
+        print(f"Playing {env_id} with {num_actions} actions")
         model = models.ActorCritic(num_outputs=num_actions)
-        return ppo_lib.train(model, **kwargs)
+        return ppo_lib.train(model, env_id=env_id, **kwargs)
 
     return _main(**config)
 
