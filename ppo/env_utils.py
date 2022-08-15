@@ -17,8 +17,60 @@
 
 import gym
 import numpy as np
-
+from gym.core import ObservationWrapper
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
+
+
+class ObsGoalWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        coord_space = gym.spaces.MultiDiscrete(
+            np.array([self.env.width, self.env.height])
+        )
+        self.observation_space = gym.spaces.Dict(
+            dict(**self.observation_space.spaces, agent=coord_space, goal=coord_space)
+        )
+
+    def observation(self, obs):
+        return dict(**obs, agent=self.env.agent_pos, goal=self.env.goal_pos)
+
+
+class FlatObsWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        space = self.observation_space.spaces
+        self.observation_space = gym.spaces.MultiDiscrete(
+            np.concatenate([space["agent"].nvec, space["goal"].nvec])
+        )
+
+    def observation(self, obs):
+        return np.concatenate([obs["agent"], obs["goal"]])
+
+
+class OneHotWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        space = self.observation_space
+        self.observation_space = gym.spaces.MultiBinary(
+            np.array([*space.nvec.shape, space.nvec.max()])
+        )
+        self.one_hot = np.eye(space.nvec.max(), dtype=np.int)
+
+    def observation(self, obs):
+        return self.one_hot[obs]
+
+
+class FlattenWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        self.observation_space = gym.spaces.MultiBinary(sum(self.observation_space.n))
+
+    def observation(self, obs):
+        return obs.flatten()
 
 
 class EmptyEnv(MiniGridEnv):
@@ -51,7 +103,7 @@ class EmptyEnv(MiniGridEnv):
         self.grid.wall_rect(0, 0, width, height)
 
         # Place a goal square in the bottom-right corner
-        goal_pos = self.place_obj(Goal())
+        self.goal_pos = self.place_obj(Goal())
 
         # Place the agent
         if self.agent_start_pos is not None:
@@ -80,6 +132,10 @@ class ClipRewardEnv(gym.RewardWrapper):
 def create_env():
     """Create a FrameStack object that serves as environment for the `game`."""
     env = EmptyEnv(agent_start_pos=None)
+    env = ObsGoalWrapper(env)
+    env = FlatObsWrapper(env)
+    env = OneHotWrapper(env)
+    env = FlattenWrapper(env)
     return env
 
 

@@ -58,3 +58,31 @@ class ActorCritic(nn.Module):
         policy_log_probabilities = nn.log_softmax(logits)
         value = nn.Dense(features=1, name="value", dtype=dtype)(x)
         return policy_log_probabilities, value
+
+
+class TwoLayer(nn.Module):
+    """Class defining the actor-critic model."""
+
+    num_outputs: int
+
+    @nn.compact
+    def __call__(self, x):
+        """Define the convolutional network architecture.
+
+        Architecture originates from "Human-level control through deep reinforcement
+        learning.", Nature 518, no. 7540 (2015): 529-533.
+        Note that this is different than the one from  "Playing atari with deep
+        reinforcement learning." arxiv.org/abs/1312.5602 (2013)
+
+        Network is used to both estimate policy (logits) and expected state value;
+        in other words, hidden layers' params are shared between policy and value
+        networks, see e.g.:
+        github.com/openai/baselines/blob/master/baselines/ppo1/cnn_policy.py
+        """
+        dtype = jnp.float32
+        x = nn.Dense(features=512, name="hidden", dtype=dtype)(x)
+        x = nn.relu(x)
+        logits = nn.Dense(features=self.num_outputs, name="logits", dtype=dtype)(x)
+        policy_log_probabilities = nn.log_softmax(logits)
+        value = nn.Dense(features=1, name="value", dtype=dtype)(x)
+        return policy_log_probabilities, value

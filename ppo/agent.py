@@ -80,7 +80,6 @@ def rcv_action_send_exp(conn):
         obs = env.reset()
         done = False
         # Observations fetched from Atari env need additional batch dimension.
-        pprint(obs)
         state = obs[None, ...]
         while not done:
             conn.send(state)

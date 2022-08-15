@@ -233,7 +233,7 @@ def process_experience(
     Returns:
       trajectories: trajectories readily accessible for `train_step()` function
     """
-    obs_shape = (84, 84, 4)
+    obs_shape = (4 * 8,)
     exp_dims = (actor_steps, num_agents)
     values_dims = (actor_steps + 1, num_agents)
     states = np.zeros(exp_dims + obs_shape, dtype=np.float32)
@@ -267,7 +267,7 @@ def process_experience(
 
 @functools.partial(jax.jit, static_argnums=1)
 def get_initial_params(key: np.ndarray, model: nn.Module):
-    input_dims = (1, 84, 84, 4)  # (minibatch, height, width, stacked frames)
+    input_dims = (1, 4 * 8)  # (minibatch, height, width, stacked frames)
     init_shape = jnp.ones(input_dims, jnp.float32)
     initial_params = model.init(key, init_shape)["params"]
     return initial_params
@@ -332,8 +332,7 @@ def train(
 
     simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
-    log_frequency = 40
-    checkpoint_frequency = 500
+    log_frequency = 1
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
     # train steps and the inner number of optimizer steps

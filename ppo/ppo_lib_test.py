@@ -94,7 +94,7 @@ class TestModel(absltest.TestCase):
 
     def test_model(self):
         outputs = self.choose_random_outputs()
-        module = models.ActorCritic(num_outputs=outputs)
+        module = models.TwoLayer(num_outputs=outputs)
         params = ppo_lib.get_initial_params(jax.random.PRNGKey(0), module)
         test_batch_size, obs_shape = 10, (84, 84, 4)
         random_input = np.random.random(size=(test_batch_size,) + obs_shape)
@@ -124,7 +124,7 @@ class TestOptimizationStep(absltest.TestCase):
         vf_coeff = 0.5
         entropy_coeff = 0.01
         batch_size = 256
-        module = models.ActorCritic(num_outputs)
+        module = models.TwoLayer(num_outputs)
         initial_params = ppo_lib.get_initial_params(jax.random.PRNGKey(0), module)
         config = ml_collections.ConfigDict(
             {

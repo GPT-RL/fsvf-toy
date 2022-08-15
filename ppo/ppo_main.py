@@ -35,7 +35,7 @@ def main(config_path: Path = Path("config.yml")):
 
     def _main(**kwargs):
         num_actions = len(MiniGridEnv.Actions)
-        model = models.ActorCritic(num_outputs=num_actions)
+        model = models.TwoLayer(num_outputs=num_actions)
         return ppo_lib.train(model, **kwargs)
 
     return _main(**config)
