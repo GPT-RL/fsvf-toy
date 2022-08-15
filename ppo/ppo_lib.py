@@ -32,6 +32,7 @@ import optax
 import agent
 import models
 import test_episodes
+from rich.console import Console
 
 
 @jax.jit
@@ -138,7 +139,7 @@ def train_step(
     *,
     clip_param: float,
     vf_coeff: float,
-    entropy_coeff: float
+    entropy_coeff: float,
 ):
     """Compilable train step.
 
@@ -329,6 +330,7 @@ def train(
     Returns:
       optimizer: the trained optimizer
     """
+    console = Console()
 
     simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
@@ -349,14 +351,14 @@ def train(
     # number of train iterations done by each train_step
 
     start_step = int(state.step) // num_epochs // iterations_per_step
-    logging.info("Start training from step: %s", start_step)
+    console.log(f"Start training from step: {start_step}")
 
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
             score = test_episodes.policy_test(1, state.apply_fn, state.params)
             frames = step * num_agents * actor_steps
-            logging.info("Step %s:\nframes seen %s\nscore %s\n\n", step, frames, score)
+            console.log(f"Step {step}:\nframes seen {frames}\nscore {score}\n\n")
 
         # Core training code.
         alpha = 1.0 - step / loop_steps if decaying_lr_and_clip_param else 1.0
