@@ -19,12 +19,10 @@ import functools
 import multiprocessing
 from typing import Any, Callable
 
+import env_utils
 import flax
 import jax
 import numpy as np
-from rich.pretty import pprint
-
-import env_utils
 
 
 @functools.partial(jax.jit, static_argnums=0)

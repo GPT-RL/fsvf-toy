@@ -14,17 +14,16 @@
 
 """Unit tests for the PPO example."""
 
-from absl.testing import absltest
-from flax.training import train_state
-import jax
-import ml_collections
-import numpy as np
-import numpy.testing as np_testing
-
 import agent
 import env_utils
+import jax
+import ml_collections
 import models
+import numpy as np
+import numpy.testing as np_testing
 import ppo_lib
+from absl.testing import absltest
+from flax.training import train_state
 
 
 # test GAE
@@ -68,14 +67,12 @@ class TestEnvironmentPreprocessing(absltest.TestCase):
 
     def test_creation(self):
         frame_shape = (84, 84, 4)
-        game = self.choose_random_game()
         env = env_utils.create_env()
         obs = env.reset()
         self.assertEqual(obs.shape, frame_shape)
 
     def test_step(self):
         frame_shape = (84, 84, 4)
-        game = self.choose_random_game()
         env = env_utils.create_env()
         obs = env.reset()
         actions = [1, 2, 3, 0]

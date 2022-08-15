@@ -31,8 +31,8 @@ Adapted from SEED RL, originally adapted from Dopamine.
 """
 
 import cv2
-from gym.spaces.box import Box
 import numpy as np
+from gym.spaces.box import Box
 
 
 class AtariPreprocessing:

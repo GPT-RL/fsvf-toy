@@ -16,22 +16,21 @@
 # pytype: disable=wrong-keyword-args
 
 import os
-from pathlib import Path
 import socket
 import sys
 import time
-from typing import Optional
-import yaml
+from pathlib import Path
 from shlex import quote
+from typing import Optional
 
-import tensorflow as tf
-from dollar_lambda import command, CommandTree, flag
 import line
-
 import models
-from ppo_lib import train
-from gym_minigrid.minigrid import MiniGridEnv
+import tensorflow as tf
+import yaml
+from dollar_lambda import CommandTree, flag
 from git import Repo
+from gym_minigrid.minigrid import MiniGridEnv
+from ppo_lib import train
 from run_logger import HasuraLogger
 
 tree = CommandTree()

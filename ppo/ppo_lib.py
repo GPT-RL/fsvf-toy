@@ -15,25 +15,21 @@
 """Library file which executes the PPO training."""
 
 import functools
-from typing import Any, Callable, Tuple, List
-from gym import Env
-
-from absl import logging
-import flax
-from flax import linen as nn
-from flax.training import train_state
-import jax
-import jax.random
-import jax.numpy as jnp
-
-import numpy as np
-import optax
-from run_logger import HasuraLogger
+from typing import Any, Callable, List, Tuple
 
 import agent
+import flax
+import jax
+import jax.numpy as jnp
+import jax.random
 import models
+import numpy as np
+import optax
 import test_episodes
+from flax import linen as nn
+from flax.training import train_state
 from rich.console import Console
+from run_logger import HasuraLogger
 
 
 @jax.jit
