@@ -20,15 +20,14 @@ from typing import Any, Callable
 import flax
 import numpy as np
 
-from ppo import agent
-from ppo import env_utils
+import agent
+import env_utils
 
 
 def policy_test(
     n_episodes: int,
     apply_fn: Callable[..., Any],
     params: flax.core.frozen_dict.FrozenDict,
-    env_id: str,
 ):
     """Perform a test of the policy in Atari environment.
 
@@ -41,7 +40,7 @@ def policy_test(
     Returns:
       total_reward: obtained score
     """
-    test_env = env_utils.create_env(env_id)
+    test_env = env_utils.create_env()
     for _ in range(n_episodes):
         obs = test_env.reset()
         state = obs[None, ...]  # add batch dimension

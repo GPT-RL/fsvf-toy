@@ -29,9 +29,9 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from ppo import agent
-from ppo import models
-from ppo import test_episodes
+import agent
+import models
+import test_episodes
 
 
 @jax.jit
@@ -293,7 +293,6 @@ def create_train_state(
 
 def train(
     model: models.ActorCritic,
-    env_id: str,
     # Total number of frames seen during training.
     total_frames: int,
     # The learning rate for the Adam optimizer.
@@ -331,7 +330,7 @@ def train(
       optimizer: the trained optimizer
     """
 
-    simulators = [agent.RemoteSimulator(env_id) for _ in range(num_agents)]
+    simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
     log_frequency = 40
     checkpoint_frequency = 500
@@ -356,7 +355,7 @@ def train(
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-            score = test_episodes.policy_test(1, state.apply_fn, state.params, env_id)
+            score = test_episodes.policy_test(1, state.apply_fn, state.params)
             frames = step * num_agents * actor_steps
             logging.info("Step %s:\nframes seen %s\nscore %s\n\n", step, frames, score)
 

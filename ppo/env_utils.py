@@ -77,7 +77,7 @@ class ClipRewardEnv(gym.RewardWrapper):
         return np.sign(reward)
 
 
-def create_env(game: str):
+def create_env():
     """Create a FrameStack object that serves as environment for the `game`."""
     env = EmptyEnv(agent_start_pos=None)
     return env

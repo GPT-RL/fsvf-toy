@@ -24,7 +24,7 @@ import jax
 import numpy as np
 from rich.pretty import pprint
 
-from ppo import env_utils
+import env_utils
 
 
 @functools.partial(jax.jit, static_argnums=0)
@@ -58,24 +58,24 @@ class RemoteSimulator:
     An object of this class is created for every agent.
     """
 
-    def __init__(self, game: str):
+    def __init__(self):
         """Start the remote process and create Pipe() to communicate with it."""
         parent_conn, child_conn = multiprocessing.Pipe()
         self.proc = multiprocessing.Process(
-            target=rcv_action_send_exp, args=(child_conn, game)
+            target=rcv_action_send_exp, args=(child_conn,)
         )
         self.proc.daemon = True
         self.conn = parent_conn
         self.proc.start()
 
 
-def rcv_action_send_exp(conn, env_id: str):
+def rcv_action_send_exp(conn):
     """Run the remote agents.
 
     Receive action from the main learner, perform one step of simulation and
     send back collected experience.
     """
-    env = env_utils.create_env(env_id)
+    env = env_utils.create_env()
     while True:
         obs = env.reset()
         done = False

@@ -21,9 +21,8 @@ import yaml
 import tensorflow as tf
 from dollar_lambda import command
 
-from ppo import env_utils
-from ppo import models
-from ppo import ppo_lib
+import models
+import ppo_lib
 from gym_minigrid.minigrid import MiniGridEnv
 
 

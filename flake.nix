@@ -111,7 +111,7 @@
           export EXTRA_CCFLAGS="-i/usr/include"
         '';
       };
-      packages.default = mkPoetryApplication poetryArgs;
+      # packages.default = mkPoetryApplication poetryArgs;
     };
   in
     utils.lib.eachDefaultSystem out;

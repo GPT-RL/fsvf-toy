@@ -69,14 +69,14 @@ class TestEnvironmentPreprocessing(absltest.TestCase):
     def test_creation(self):
         frame_shape = (84, 84, 4)
         game = self.choose_random_game()
-        env = env_utils.create_env(game, clip_rewards=True)
+        env = env_utils.create_env()
         obs = env.reset()
         self.assertEqual(obs.shape, frame_shape)
 
     def test_step(self):
         frame_shape = (84, 84, 4)
         game = self.choose_random_game()
-        env = env_utils.create_env(game, clip_rewards=True)
+        env = env_utils.create_env()
         obs = env.reset()
         actions = [1, 2, 3, 0]
         for a in actions:
