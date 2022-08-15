@@ -89,7 +89,7 @@
         overrides = poetry2nix.overrides.withDefaults overrides;
       };
       poetryEnv = mkPoetryEnv poetryArgs;
-    in {
+    in rec {
       devShell = pkgs.mkShell rec {
         buildInputs = with pkgs; [
           cudatoolkit
@@ -110,7 +110,14 @@
           export EXTRA_CCFLAGS="-i/usr/include"
         '';
       };
-      # packages.default = mkPoetryApplication poetryArgs;
+      packages.default = pkgs.dockerTools.buildImage {
+        name = "ppo";
+        tag = "latest";
+        copyToRoot = [poetryEnv];
+        config = {
+          Cmd = ["${poetryEnv}/bin/python"];
+        };
+      };
     };
   in
     utils.lib.eachDefaultSystem out;
