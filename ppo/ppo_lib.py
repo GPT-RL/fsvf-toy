@@ -28,6 +28,7 @@ import jax.numpy as jnp
 
 import numpy as np
 import optax
+from run_logger import HasuraLogger
 
 import agent
 import models
@@ -293,32 +294,35 @@ def create_train_state(
 
 
 def train(
-    model: models.ActorCritic,
-    # Total number of frames seen during training.
-    total_frames: int,
-    # The learning rate for the Adam optimizer.
-    learning_rate: float,
-    # Batch size used in training.
-    batch_size: int,
-    # Number of agents playing in parallel.
-    num_agents: int,
     # Number of steps each agent performs in one policy unroll.
     actor_steps: int,
-    # Number of training epochs per each unroll of the policy.
-    num_epochs: int,
+    # Batch size used in training.
+    batch_size: int,
+    # The PPO clipping parameter used to clamp ratios in loss function.
+    clip_param: float,
+    # Linearly decay learning rate and clipping parameter to zero during
+    # the training.
+    decaying_lr_and_clip_param: bool,
+    # Weight of entropy bonus in the total loss.
+    entropy_coeff: float,
     # RL discount parameter.
     gamma: float,
     # Generalized Advantage Estimation parameter.
     lambda_: float,
-    # The PPO clipping parameter used to clamp ratios in loss function.
-    clip_param: float,
+    # The learning rate for the Adam optimizer.
+    learning_rate: float,
+    # logger for logging to Hasura
+    logger: HasuraLogger,
+    # Architecture for producing policy and value estimates
+    model: models.ActorCritic,
+    # Total number of frames seen during training.
+    total_frames: int,
+    # Number of agents playing in parallel.
+    num_agents: int,
+    # Number of training epochs per each unroll of the policy.
+    num_epochs: int,
     # Weight of value function loss in the total loss.
     vf_coeff: float,
-    # Weight of entropy bonus in the total loss.
-    entropy_coeff: float,
-    # Linearly decay learning rate and clipping parameter to zero during
-    # the training.
-    decaying_lr_and_clip_param: bool,
 ):
     """Main training loop.
 

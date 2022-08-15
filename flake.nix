@@ -96,7 +96,6 @@
           nvidia_x11
           poetry
           poetryEnv
-          pre-commit
           nodePackages.prettier
         ];
         shellHook = ''

@@ -13,11 +13,13 @@ dollar-lambda = "^1.1.4"
 run-logger = "^0.1.8"
 tensorflow-gpu = "^2.9.1"
 flax = "^0.5.3"
+GitPython = "^3.1.27"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
 ipdb = "^0.13.9"
 ipython = "^8.4.0"
+pre-commit = "^2.20.0"
 
 [tool.poetry.scripts]
 main = 'ppo:ppo_main.main'
