@@ -67,7 +67,9 @@ class FlattenWrapper(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        self.observation_space = gym.spaces.MultiBinary(sum(self.observation_space.n))
+        self.observation_space = gym.spaces.MultiBinary(
+            int(np.prod(self.observation_space.n))
+        )
 
     def observation(self, obs):
         return obs.flatten()

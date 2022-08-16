@@ -15,9 +15,11 @@
 """Library file which executes the PPO training."""
 
 import functools
+import time
 from typing import Any, Callable, List, Tuple
 
 import agent
+import env_utils
 import flax
 import jax
 import jax.numpy as jnp
@@ -29,6 +31,7 @@ import test_episodes
 from flax import linen as nn
 from flax.training import train_state
 from rich.console import Console
+from rich.pretty import pprint
 from run_logger import HasuraLogger
 
 
@@ -218,6 +221,7 @@ def process_experience(
     num_agents: int,
     gamma: float,
     lambda_: float,
+    obs_shape: List[int],
 ):
     """Process experience for training, including advantage estimation.
 
@@ -231,10 +235,9 @@ def process_experience(
     Returns:
       trajectories: trajectories readily accessible for `train_step()` function
     """
-    obs_shape = (4 * 8,)
     exp_dims = (actor_steps, num_agents)
     values_dims = (actor_steps + 1, num_agents)
-    states = np.zeros(exp_dims + obs_shape, dtype=np.float32)
+    states = np.zeros([*exp_dims, *obs_shape], dtype=np.float32)
     actions = np.zeros(exp_dims, dtype=np.int32)
     rewards = np.zeros(exp_dims, dtype=np.float32)
     values = np.zeros(values_dims, dtype=np.float32)
@@ -263,9 +266,9 @@ def process_experience(
     return trajectories
 
 
-@functools.partial(jax.jit, static_argnums=1)
-def get_initial_params(key: np.ndarray, model: nn.Module):
-    input_dims = (1, 4 * 8)  # (minibatch, height, width, stacked frames)
+@functools.partial(jax.jit, static_argnums=[0, 2])
+def get_initial_params(input_dims: List[int], key: np.ndarray, model: nn.Module):
+    input_dims = [1, *input_dims]  # (minibatch, height, width, stacked frames)
     init_shape = jnp.ones(input_dims, jnp.float32)
     initial_params = model.init(key, init_shape)["params"]
     return initial_params
@@ -334,13 +337,19 @@ def train(
 
     simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
-    log_frequency = 1
+    log_frequency = 50
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
     # train steps and the inner number of optimizer steps
     iterations_per_step = num_agents * actor_steps // batch_size
 
-    initial_params = get_initial_params(jax.random.PRNGKey(0), model)
+    obs_shape = env_utils.create_env().observation_space.shape
+    assert obs_shape is not None
+    initial_params = get_initial_params(
+        input_dims=obs_shape,
+        key=jax.random.PRNGKey(0),
+        model=model,
+    )
     state = create_train_state(
         decaying_lr_and_clip_param=decaying_lr_and_clip_param,
         params=initial_params,
@@ -351,24 +360,31 @@ def train(
     # number of train iterations done by each train_step
 
     start_step = int(state.step) // num_epochs // iterations_per_step
+    start_time = time.time()
     console.log(f"Start training from step: {start_step}")
 
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-            score = test_episodes.policy_test(1, state.apply_fn, state.params)
+            test_return = test_episodes.policy_test(1, state.apply_fn, state.params)
             frames = step * num_agents * actor_steps
-            console.log(f"Step {step}:\nframes seen {frames}\nscore {score}\n\n")
+            log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
+                "return": test_return
+            }
+            pprint(log)
+            if logger.run_id is not None:
+                logger.log(**log)
 
         # Core training code.
         alpha = 1.0 - step / loop_steps if decaying_lr_and_clip_param else 1.0
         all_experiences = get_experience(state, simulators, actor_steps)
         trajectories = process_experience(
-            all_experiences,
-            actor_steps,
-            num_agents,
-            gamma,
-            lambda_,
+            actor_steps=actor_steps,
+            experience=all_experiences,
+            gamma=gamma,
+            lambda_=lambda_,
+            num_agents=num_agents,
+            obs_shape=obs_shape,
         )
         clip_param = clip_param * alpha
         for _ in range(num_epochs):

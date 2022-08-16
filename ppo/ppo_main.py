@@ -27,31 +27,42 @@ import line
 import models
 import tensorflow as tf
 import yaml
-from dollar_lambda import CommandTree, flag
+from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git import Repo
 from gym_minigrid.minigrid import MiniGridEnv
 from ppo_lib import train
 from run_logger import HasuraLogger
 
 tree = CommandTree()
-DEFAULT_CONFIG = "config.yml"
+DEFAULT_CONFIG = Path("config.yml")
 GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
 
 
+def main(**kwargs):
+    num_actions = len(MiniGridEnv.Actions)
+    model = models.TwoLayer(num_outputs=num_actions)
+    return train(model=model, **kwargs)
+
+
 @tree.command()
-def no_log(config_path: Path = Path("config.yml")):
+def no_log(config_path: Path = DEFAULT_CONFIG):
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
     with config_path.open() as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    def _main(**kwargs):
-        num_actions = len(MiniGridEnv.Actions)
-        model = models.TwoLayer(num_outputs=num_actions)
-        return train(model, **kwargs)
+    logger = HasuraLogger(GRAPHQL_ENDPOINT)
+    return main(**config, logger=logger)
 
-    return _main(**config)
+
+@tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
+def log(allow_dirty: bool = False, config_path: Path = DEFAULT_CONFIG, **kwargs):
+    repo = Repo(".")
+    with config_path.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    config.update(kwargs)
+    return _log(**config, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
 
 
 def _log(
@@ -81,13 +92,8 @@ def _log(
     assert visualizer_url is not None, "VISUALIZER_URL must be set"
 
     def xy():
-        ys = [
-            "return",
-            "use_model_prob",
-        ]
-        for y in ys:
-            for x in ["step", "hours"]:
-                yield x, y
+        for x in ["step", "hours"]:
+            yield x, "return"
 
     charts = [
         line.spec(color="seed", x=x, y=y, visualizer_url=visualizer_url)
@@ -103,8 +109,8 @@ def _log(
             name=name,
         )
     )  # todo: encapsulate in HasuraLogger
-    train(**kwargs, logger=logger)
+    main(**kwargs, logger=logger)
 
 
 if __name__ == "__main__":
-    no_log()
+    tree()

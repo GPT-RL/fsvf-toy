@@ -111,12 +111,25 @@
         '';
       };
       packages.default = pkgs.dockerTools.buildImage {
+        #fromImageName = "nvidia/cuda";
+        #fromImageTag = "11.7.1-devel-ubuntu20.04";
         name = "ppo";
         tag = "latest";
-        copyToRoot = [poetryEnv];
+        copyToRoot = [poetryEnv nvidia_x11 cudatoolkit];
         config = {
-          Cmd = ["${poetryEnv}/bin/python"];
+          Cmd = ["${pkgs.bash}/bin/bash"];
         };
+        runAsRoot = ''
+          export PYTHONFAULTHANDLER=1
+          export PYTHONBREAKPOINT=ipdb.set_trace
+          set -o allexport
+          source .env
+          set +o allexport
+          export CUDA_PATH=${cudatoolkit.lib}
+          export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
+          export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
+          export EXTRA_CCFLAGS="-i/usr/include"
+        '';
       };
     };
   in
