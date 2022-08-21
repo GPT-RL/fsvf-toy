@@ -56,18 +56,18 @@ class RemoteSimulator:
     An object of this class is created for every agent.
     """
 
-    def __init__(self):
+    def __init__(self, seed: int):
         """Start the remote process and create Pipe() to communicate with it."""
         parent_conn, child_conn = multiprocessing.Pipe()
         self.proc = multiprocessing.Process(
-            target=rcv_action_send_exp, args=(child_conn,)
+            target=rcv_action_send_exp, args=(child_conn, seed)
         )
         self.proc.daemon = True
         self.conn = parent_conn
         self.proc.start()
 
 
-def rcv_action_send_exp(conn):
+def rcv_action_send_exp(conn, seed: int):
     """Run the remote agents.
 
     Receive action from the main learner, perform one step of simulation and
@@ -75,7 +75,7 @@ def rcv_action_send_exp(conn):
     """
     env = env_utils.create_env()
     while True:
-        obs = env.reset()
+        obs = env.reset(seed=seed)
         done = False
         # Observations fetched from Atari env need additional batch dimension.
         state = obs[None, ...]

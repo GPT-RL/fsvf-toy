@@ -17,6 +17,7 @@
 
 import operator
 from functools import reduce
+from typing import Optional
 
 import gym
 import numpy as np
@@ -148,9 +149,9 @@ class EmptyEnv(MiniGridEnv):
 
         self.mission = "get to the green goal square"
 
-    def reset(self):
+    def reset(self, seed: Optional[int] = None):
         self.__action = self.__reward = self.__done = None
-        return super().reset()
+        return super().reset(seed=seed)
 
     def step(self, action):
         self.__action = action

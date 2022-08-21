@@ -315,12 +315,14 @@ def train(
     logger: HasuraLogger,
     # Architecture for producing policy and value estimates
     model: models.ActorCritic,
-    # Total number of frames seen during training.
-    total_frames: int,
     # Number of agents playing in parallel.
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
     num_epochs: int,
+    # random seed
+    seed: int,
+    # Total number of frames seen during training.
+    total_frames: int,
     # Weight of value function loss in the total loss.
     vf_coeff: float,
 ):
@@ -336,7 +338,7 @@ def train(
     """
     console = Console()
 
-    simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
+    simulators = [agent.RemoteSimulator(seed + i) for i in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
@@ -366,7 +368,12 @@ def train(
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-            test_return = test_episodes.policy_test(1, state.apply_fn, state.params)
+            test_return = test_episodes.policy_test(
+                apply_fn=state.apply_fn,
+                n_episodes=1,
+                params=state.params,
+                seed=seed + step,
+            )
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,

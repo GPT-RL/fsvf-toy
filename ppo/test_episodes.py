@@ -24,9 +24,10 @@ import numpy as np
 
 
 def policy_test(
-    n_episodes: int,
     apply_fn: Callable[..., Any],
+    n_episodes: int,
     params: flax.core.frozen_dict.FrozenDict,
+    seed: int,
 ):
     """Perform a test of the policy in Atari environment.
 
@@ -40,8 +41,8 @@ def policy_test(
       total_reward: obtained score
     """
     test_env = env_utils.create_env()
-    for _ in range(n_episodes):
-        obs = test_env.reset()
+    for i in range(n_episodes):
+        obs = test_env.reset(seed=seed + i)
         state = obs[None, ...]  # add batch dimension
         total_reward = 0.0
         for t in itertools.count():
