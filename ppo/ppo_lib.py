@@ -31,7 +31,6 @@ import test_episodes
 from flax import linen as nn
 from flax.training import train_state
 from rich.console import Console
-from rich.pretty import pprint
 from run_logger import HasuraLogger
 
 
@@ -371,7 +370,7 @@ def train(
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return
             }
-            pprint(log)
+            console.log(log)
             if logger.run_id is not None:
                 logger.log(**log)
 
