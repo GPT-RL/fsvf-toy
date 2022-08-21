@@ -48,39 +48,27 @@
         };
         # Use cuda-enabled jaxlib as required
         jaxlib = pyprev.jaxlibWithCuda.override {
-          inherit
-            (pyprev)
-            absl-py
-            flatbuffers
-            numpy
-            scipy
-            six
-            ;
+          inherit (pyprev) absl-py flatbuffers numpy scipy six;
         };
-        ml-collections =
-          pyprev.buildPythonPackage
-          rec {
-            pname = "ml_collections";
-            version = "0.1.1";
-            src = pyprev.fetchPypi {
-              inherit pname version;
-              sha256 = "sha256-P+/McuxDOqHl0yMHo+R0u7Z/QFvoFOpSohZr/J2+aMw=";
-            };
-            buildInputs = with pyfinal; [
-              absl-py
-              contextlib2
-              pyyaml
-              six
-            ];
-            prePatch = ''
-              export HOME=$TMPDIR;
-            '';
+        ml-collections = pyprev.buildPythonPackage rec {
+          pname = "ml_collections";
+          version = "0.1.1";
+          src = pyprev.fetchPypi {
+            inherit pname version;
+            sha256 = "sha256-P+/McuxDOqHl0yMHo+R0u7Z/QFvoFOpSohZr/J2+aMw=";
           };
+          buildInputs = with pyfinal; [absl-py contextlib2 pyyaml six];
+          prePatch = ''
+            export HOME=$TMPDIR;
+          '';
+        };
         ray = pyprev.ray.overridePythonAttrs (old: {
-          propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [pyfinal.pandas];
+          propagatedBuildInputs =
+            (old.propagatedBuildInputs or [])
+            ++ [pyfinal.pandas];
         });
         run-logger = pyprev.run-logger.overridePythonAttrs (old: {
-           buildInputs = old.buildInputs or [ ] ++ [ pyprev.poetry ];
+          buildInputs = old.buildInputs or [] ++ [pyprev.poetry];
         });
         tensorflow-gpu =
           # Override the nixpkgs bin version instead of
@@ -98,6 +86,7 @@
     in rec {
       devShell = pkgs.mkShell rec {
         buildInputs = with pkgs; [
+          alejandra
           cudatoolkit
           nodePackages.prettier
           nvidia_x11
@@ -117,25 +106,17 @@
         '';
       };
       packages.default = pkgs.dockerTools.buildImage {
-        #fromImageName = "nvidia/cuda";
-        #fromImageTag = "11.7.1-devel-ubuntu20.04";
-        name = "ppo";
+        name = "cuda-env-docker";
         tag = "latest";
-        copyToRoot = [poetryEnv nvidia_x11 cudatoolkit];
-        config = {
-          Cmd = ["${pkgs.bash}/bin/bash"];
+        copyToRoot = pkgs.buildEnv {
+          name = "image-root";
+          pathsToLink = ["/bin"];
+          paths = with pkgs; [cudatoolkit linuxPackages.nvidia_x11];
         };
-        runAsRoot = ''
-          export PYTHONFAULTHANDLER=1
-          export PYTHONBREAKPOINT=ipdb.set_trace
-          set -o allexport
-          source .env
-          set +o allexport
-          export CUDA_PATH=${cudatoolkit.lib}
-          export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
-          export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
-          export EXTRA_CCFLAGS="-i/usr/include"
-        '';
+        config = {
+          Env = with pkgs; ["LD_LIBRARY_PATH=/usr/lib64/"];
+          Cmd = ["/bin/nvidia-smi"];
+        };
       };
     };
   in
