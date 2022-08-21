@@ -369,7 +369,8 @@ def train(
             test_return = test_episodes.policy_test(1, state.apply_fn, state.params)
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
-                "return": test_return
+                "return": test_return,
+                "run ID": logger.run_id,
             }
             console.log(log)
             if logger.run_id is not None:

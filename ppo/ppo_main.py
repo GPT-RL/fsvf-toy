@@ -96,7 +96,7 @@ def _log(
             yield x, "return"
 
     charts = [
-        line.spec(color="seed", x=x, y=y, visualizer_url=visualizer_url)
+        line.spec(color="run ID", x=x, y=y, visualizer_url=visualizer_url)
         for x, y in xy()
     ]
 
