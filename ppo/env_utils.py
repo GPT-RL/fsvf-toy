@@ -150,6 +150,7 @@ class EmptyEnv(MiniGridEnv):
         self.mission = "get to the green goal square"
 
     def reset(self, seed: Optional[int] = None):
+        seed = seed or 0
         self.__action = self.__reward = self.__done = None
         return super().reset(seed=seed)
 
