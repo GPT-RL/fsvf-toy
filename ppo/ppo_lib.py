@@ -315,7 +315,7 @@ def train(
     # logger for logging to Hasura
     logger: HasuraLogger,
     # Architecture for producing policy and value estimates
-    model: models.ActorCritic,
+    model: models.TwoLayer,
     # Number of agents playing in parallel.
     num_agents: int,
     # Number of training epochs per each unroll of the policy.

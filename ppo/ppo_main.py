@@ -28,7 +28,7 @@ import models
 import tensorflow as tf
 import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
-from git import Repo
+from git.repo import Repo
 from gym_minigrid.minigrid import MiniGridEnv
 from ppo_lib import train
 from run_logger import HasuraLogger
@@ -52,6 +52,7 @@ def no_log(config_path: Path = DEFAULT_CONFIG):
     with config_path.open() as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
+    assert GRAPHQL_ENDPOINT is not None
     logger = HasuraLogger(GRAPHQL_ENDPOINT)
     return main(**config, logger=logger)
 
@@ -100,6 +101,7 @@ def _log(
         for x, y in xy()
     ]
 
+    assert GRAPHQL_ENDPOINT is not None
     logger = HasuraLogger(GRAPHQL_ENDPOINT)
     logger.create_run(metadata=metadata, sweep_id=sweep_id, charts=charts)
     logger.update_metadata(  # this updates the metadata stored in the database
