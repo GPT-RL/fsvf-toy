@@ -309,6 +309,8 @@ def train(
     lambda_: float,
     # The learning rate for the Adam optimizer.
     learning_rate: float,
+    # number of steps between logs
+    log_frequency: int,
     # logger for logging to Hasura
     logger: HasuraLogger,
     # Architecture for producing policy and value estimates
@@ -336,7 +338,6 @@ def train(
 
     simulators = [agent.RemoteSimulator() for _ in range(num_agents)]
     loop_steps = total_frames // (num_agents * actor_steps)
-    log_frequency = 50
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
     # train steps and the inner number of optimizer steps
