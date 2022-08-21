@@ -89,7 +89,6 @@
           alejandra
           cudatoolkit
           nodePackages.prettier
-          nvidia_x11
           poetry
           poetryEnv
         ];
@@ -99,10 +98,7 @@
           set -o allexport
           source .env
           set +o allexport
-          export CUDA_PATH=${cudatoolkit.lib}
-          export LD_LIBRARY_PATH=${cudatoolkit.lib}/lib:${nvidia_x11}/lib
-          export EXTRA_LDFLAGS="-l/lib -l${nvidia_x11}/lib"
-          export EXTRA_CCFLAGS="-i/usr/include"
+          export LD_LIBRARY_PATH=${nvidia_x11}/lib
         '';
       };
       packages.default = pkgs.dockerTools.buildImage {
@@ -111,7 +107,10 @@
         copyToRoot = pkgs.buildEnv {
           name = "image-root";
           pathsToLink = ["/bin"];
-          paths = with pkgs; [cudatoolkit linuxPackages.nvidia_x11];
+          paths = with pkgs; [
+            cudatoolkit
+            linuxPackages.nvidia_x11
+          ];
         };
         config = {
           Env = with pkgs; ["LD_LIBRARY_PATH=/usr/lib64/"];
