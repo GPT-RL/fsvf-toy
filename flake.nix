@@ -83,38 +83,43 @@
         overrides = poetry2nix.overrides.withDefaults overrides;
       };
       poetryEnv = mkPoetryEnv poetryArgs;
+      buildInputs = with pkgs; [
+        alejandra
+        coreutils
+        nodePackages.prettier
+        poetry
+        poetryEnv
+      ];
     in rec {
       devShell = pkgs.mkShell rec {
-        buildInputs = with pkgs; [
-          alejandra
-          cudatoolkit
-          nodePackages.prettier
-          poetry
-          poetryEnv
-        ];
+        inherit buildInputs;
+        PYTHONFAULTHANDLER = 1;
+        PYTHONBREAKPOINT = "ipdb.set_trace";
+        LD_LIBRARY_PATH = "${nvidia_x11}/lib";
         shellHook = ''
-          export PYTHONFAULTHANDLER=1
-          export PYTHONBREAKPOINT=ipdb.set_trace
           set -o allexport
           source .env
           set +o allexport
-          export LD_LIBRARY_PATH=${nvidia_x11}/lib
         '';
       };
       packages.default = pkgs.dockerTools.buildImage {
-        name = "cuda-env-docker";
+        name = "ppo";
         tag = "latest";
-        copyToRoot = pkgs.buildEnv {
-          name = "image-root";
-          pathsToLink = ["/bin"];
-          paths = with pkgs; [
-            cudatoolkit
-            linuxPackages.nvidia_x11
-          ];
-        };
+        copyToRoot =
+          pkgs.buildEnv
+          {
+            name = "image-root";
+            pathsToLink = ["/bin" "ppo"];
+            paths = buildInputs ++ [./ppo];
+          };
         config = {
-          Env = with pkgs; ["LD_LIBRARY_PATH=/usr/lib64/"];
-          Cmd = ["/bin/nvidia-smi"];
+          Env = with pkgs; [
+            "PYTHONFAULTHANDLER=1"
+            "PYTHONBREAKPOINT=ipdb.set_trace"
+            "LD_LIBRARY_PATH=/usr/lib64/"
+            "PATH=/bin:$PATH"
+          ];
+          Cmd = ["${pkgs.bash}/bin/bash"];
         };
       };
     };
