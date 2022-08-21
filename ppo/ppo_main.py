@@ -21,17 +21,19 @@ import sys
 import time
 from pathlib import Path
 from shlex import quote
-from typing import Optional
+from typing import Any, Optional
 
 import line
 import models
+import ray
 import tensorflow as tf
 import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git.repo import Repo
 from gym_minigrid.minigrid import MiniGridEnv
 from ppo_lib import train
-from run_logger import HasuraLogger
+from ray import tune
+from run_logger import RunLogger, create_sweep
 
 tree = CommandTree()
 DEFAULT_CONFIG = Path("config.yml")
@@ -53,7 +55,7 @@ def no_log(config_path: Path = DEFAULT_CONFIG):
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     assert GRAPHQL_ENDPOINT is not None
-    logger = HasuraLogger(GRAPHQL_ENDPOINT)
+    logger = RunLogger(GRAPHQL_ENDPOINT)
     return main(**config, logger=logger)
 
 
@@ -102,7 +104,7 @@ def _log(
     ]
 
     assert GRAPHQL_ENDPOINT is not None
-    logger = HasuraLogger(GRAPHQL_ENDPOINT)
+    logger = RunLogger(GRAPHQL_ENDPOINT)
     logger.create_run(metadata=metadata, sweep_id=sweep_id, charts=charts)
     logger.update_metadata(  # this updates the metadata stored in the database
         dict(
@@ -112,6 +114,49 @@ def _log(
         )
     )  # todo: encapsulate in HasuraLogger
     main(**kwargs, logger=logger)
+
+
+def trainable(config: dict):
+    return _log(**config)
+
+
+@tree.subcommand(
+    parsers=dict(name=argument("name"), kwargs=nonpositional(ALLOW_DIRTY_FLAG))
+)
+def sweep(
+    name: str,
+    config_path: Path = DEFAULT_CONFIG,
+    random_search: bool = False,
+    **kwargs,
+):
+    with config_path.open() as f:
+        partial_config = yaml.load(f, yaml.FullLoader)
+
+    config: "dict[str, Any]" = dict(
+        name=name,
+        repo=Repo("."),
+        **kwargs,
+        **{
+            k: (tune.choice(v) if random_search else tune.grid_search(v))
+            if isinstance(v, list)
+            else v
+            for k, v in partial_config.items()
+        },
+    )
+    assert GRAPHQL_ENDPOINT is not None
+    sweep_id = create_sweep(
+        config=config_path,
+        graphql_endpoint=GRAPHQL_ENDPOINT,
+        log_level="INFO",
+        name=name,
+        project=None,
+    )
+    config.update(sweep_id=sweep_id)
+    ray.init()
+    analysis = tune.run(
+        trainable, config=config, resources_per_trial=dict(cpu=4, gpu=1)
+    )
+    print(analysis.stats())
 
 
 if __name__ == "__main__":

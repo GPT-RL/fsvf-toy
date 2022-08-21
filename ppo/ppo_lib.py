@@ -31,7 +31,7 @@ import test_episodes
 from flax import linen as nn
 from flax.training import train_state
 from rich.console import Console
-from run_logger import HasuraLogger
+from run_logger import RunLogger
 
 
 @jax.jit
@@ -313,7 +313,7 @@ def train(
     # number of steps between logs
     log_frequency: int,
     # logger for logging to Hasura
-    logger: HasuraLogger,
+    logger: RunLogger,
     # Architecture for producing policy and value estimates
     model: models.TwoLayer,
     # Number of agents playing in parallel.

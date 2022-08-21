@@ -76,6 +76,12 @@
               export HOME=$TMPDIR;
             '';
           };
+        ray = pyprev.ray.overridePythonAttrs (old: {
+          propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [pyfinal.pandas];
+        });
+        run-logger = pyprev.run-logger.overridePythonAttrs (old: {
+           buildInputs = old.buildInputs or [ ] ++ [ pyprev.poetry ];
+        });
         tensorflow-gpu =
           # Override the nixpkgs bin version instead of
           # poetry2nix version so that rpath is set correctly.
