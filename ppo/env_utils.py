@@ -15,24 +15,36 @@
 """Utilities for handling the Atari environment."""
 
 
+import operator
+from functools import reduce
+
 import gym
 import numpy as np
+from gym import RewardWrapper  # type: ignore
 from gym.core import ObservationWrapper
+from gym.spaces import Dict, Discrete, MultiBinary, MultiDiscrete
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
+from rich.pretty import pprint
+from rich.text import Text
+
+
+def join_text(*text: Text, joiner: str) -> Text:
+    head, *tail = text
+    return reduce(operator.add, [head] + [Text(joiner) + t for t in tail])
 
 
 class ObsGoalWrapper(ObservationWrapper):
-    def __init__(self, env):
+    def __init__(self, env: "EmptyEnv"):
         super().__init__(env)
 
-        coord_space = gym.spaces.MultiDiscrete(
-            np.array([self.env.width, self.env.height])
-        )
-        self.observation_space = gym.spaces.Dict(
+        coord_space = MultiDiscrete(np.array([env.width, env.height]))
+        assert isinstance(self.observation_space, Dict)
+        self.observation_space = Dict(
             dict(**self.observation_space.spaces, agent=coord_space, goal=coord_space)
         )
 
     def observation(self, obs):
+        assert isinstance(self.env, EmptyEnv)
         return dict(**obs, agent=self.env.agent_pos, goal=self.env.goal_pos)
 
 
@@ -40,13 +52,20 @@ class FlatObsWrapper(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        space = self.observation_space.spaces
-        self.observation_space = gym.spaces.MultiDiscrete(
-            np.concatenate([space["agent"].nvec, space["goal"].nvec])
+        assert isinstance(self.observation_space, Dict)
+        spaces = self.observation_space.spaces
+        agent_space = spaces["agent"]
+        dir_space = spaces["direction"]
+        goal_space = spaces["goal"]
+        assert isinstance(agent_space, MultiDiscrete)
+        assert isinstance(dir_space, Discrete)
+        assert isinstance(goal_space, MultiDiscrete)
+        self.observation_space = MultiDiscrete(
+            np.array([*agent_space.nvec, dir_space.n, *goal_space.nvec])
         )
 
     def observation(self, obs):
-        return np.concatenate([obs["agent"], obs["goal"]])
+        return np.concatenate([obs["agent"], np.array([obs["direction"]]), obs["goal"]])
 
 
 class OneHotWrapper(ObservationWrapper):
@@ -67,9 +86,8 @@ class FlattenWrapper(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        self.observation_space = gym.spaces.MultiBinary(
-            int(np.prod(self.observation_space.n))
-        )
+        assert isinstance(self.observation_space, MultiBinary)
+        self.observation_space = MultiBinary(int(np.prod(self.observation_space.n)))
 
     def observation(self, obs):
         return obs.flatten()
@@ -94,8 +112,22 @@ class EmptyEnv(MiniGridEnv):
             max_steps=4 * size * size,
             # Set this to True for maximum speed
             see_through_walls=True,
-            **kwargs
+            **kwargs,
         )
+
+    @staticmethod
+    def ascii_of_image(image: np.ndarray):
+        def rows():
+            for row in image:
+                yield join_text(
+                    *[
+                        Text("██", style=f"rgb({','.join(rgb.astype(int))})")
+                        for rgb in row
+                    ],
+                    joiner="",
+                )
+
+        return join_text(*rows(), joiner="\n")
 
     def _gen_grid(self, width, height):
         # Create an empty grid
@@ -116,15 +148,38 @@ class EmptyEnv(MiniGridEnv):
 
         self.mission = "get to the green goal square"
 
+    def reset(self):
+        self.__action = self.__reward = self.__done = None
+        return super().reset()
 
-class ClipRewardEnv(gym.RewardWrapper):
+    def step(self, action):
+        self.__action = action
+        state, self.__reward, self.__done, info = super().step(action)
+        return state, self.__reward, self.__done, info
+
+    def render(self, mode="human", highlight=True, tile_size=...):
+        print(self.ascii_of_image(self.render_obs()))
+        print()
+        subtitle = ""
+        if self.__action is not None:
+            subtitle += f", {self.__action.name.replace('_', ' ')}"
+        if self._reward is not None:
+            assert isinstance(self.__reward, float)
+            subtitle += f", r={round(self.__reward, 2)}"
+        if self.__done:
+            subtitle += ", done"
+        pprint(subtitle.swapcase())
+        input("Press enter to continue.")
+
+
+class ClipRewardEnv(RewardWrapper):
     """Adapted from OpenAI baselines.
 
     github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
     """
 
     def __init__(self, env):
-        gym.RewardWrapper.__init__(self, env)
+        RewardWrapper.__init__(self, env)
 
     def reward(self, reward):
         """Bin reward to {+1, 0, -1} by its sign."""
@@ -148,4 +203,5 @@ def get_num_actions(game: str):
     actor-critic model.
     """
     env = gym.make(game)
+    assert isinstance(env.action_space, Discrete)
     return env.action_space.n
