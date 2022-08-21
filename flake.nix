@@ -93,10 +93,10 @@
       devShell = pkgs.mkShell rec {
         buildInputs = with pkgs; [
           cudatoolkit
+          nodePackages.prettier
           nvidia_x11
           poetry
           poetryEnv
-          nodePackages.prettier
         ];
         shellHook = ''
           export PYTHONFAULTHANDLER=1

@@ -178,8 +178,9 @@ def train_step(
 
 
 def get_experience(
-    state: train_state.TrainState,
+    rng: np.random.Generator,
     simulators: List[agent.RemoteSimulator],
+    state: train_state.TrainState,
     steps_per_actor: int,
 ):
     """Collect experience from agents.
@@ -201,7 +202,7 @@ def get_experience(
         probs = np.exp(np.array(log_probs))
         for i, sim in enumerate(simulators):
             probabilities = probs[i]
-            action = np.random.choice(probs.shape[1], p=probabilities)
+            action = rng.choice(probs.shape[1], p=probabilities)
             sim.conn.send(action)
         experiences = []
         for i, sim in enumerate(simulators):
@@ -259,7 +260,7 @@ def process_experience(
     # After preprocessing, concatenate data from all agents.
     trajectories = (states, actions, log_probs, returns, advantages)
     trajectory_len = num_agents * actor_steps
-    trajectories = tuple(
+    trajectories = tuple(  # type: ignore
         map(lambda x: np.reshape(x, (trajectory_len,) + x.shape[2:]), trajectories)
     )
     return trajectories
@@ -347,9 +348,11 @@ def train(
 
     obs_shape = env_utils.create_env().observation_space.shape
     assert obs_shape is not None
+    rng = np.random.default_rng(seed)
+    key = jax.random.PRNGKey(seed)
     initial_params = get_initial_params(
         input_dims=obs_shape,
-        key=jax.random.PRNGKey(0),
+        key=key,
         model=model,
     )
     state = create_train_state(
@@ -385,18 +388,23 @@ def train(
 
         # Core training code.
         alpha = 1.0 - step / loop_steps if decaying_lr_and_clip_param else 1.0
-        all_experiences = get_experience(state, simulators, actor_steps)
+        all_experiences = get_experience(
+            rng=rng,
+            simulators=simulators,
+            state=state,
+            steps_per_actor=actor_steps,
+        )
         trajectories = process_experience(
             actor_steps=actor_steps,
             experience=all_experiences,
             gamma=gamma,
             lambda_=lambda_,
             num_agents=num_agents,
-            obs_shape=obs_shape,
+            obs_shape=list(obs_shape),
         )
         clip_param = clip_param * alpha
         for _ in range(num_epochs):
-            permutation = np.random.permutation(num_agents * actor_steps)
+            permutation = rng.permutation(num_agents * actor_steps)
             trajectories = tuple(x[permutation] for x in trajectories)
             state, _ = train_step(
                 state,

@@ -28,7 +28,7 @@ def policy_test(
     n_episodes: int,
     params: flax.core.frozen_dict.FrozenDict,
     seed: int,
-):
+) -> np.float32:
     """Perform a test of the policy in Atari environment.
 
     Args:
@@ -41,19 +41,21 @@ def policy_test(
       total_reward: obtained score
     """
     test_env = env_utils.create_env()
+    returns: list[float] = []
     for i in range(n_episodes):
         obs = test_env.reset(seed=seed + i)
-        state = obs[None, ...]  # add batch dimension
-        total_reward = 0.0
+        state = obs[None, ...]  # type: ignore # add batch dimension
+        ep_return = 0.0
         for t in itertools.count():
             log_probs, _ = agent.policy_action(apply_fn, params, state)
             probs = np.exp(np.array(log_probs, dtype=np.float32))
             probabilities = probs[0] / probs[0].sum()
-            action = np.random.choice(probs.shape[1], p=probabilities)
-            obs, reward, done, _ = test_env.step(action)
-            total_reward += reward
+            action = test_env.np_random.choice(probs.shape[1], p=probabilities)
+            obs, reward, done, _ = test_env.step(action)  # type: ignore
+            ep_return += reward
             next_state = obs[None, ...] if not done else None
             state = next_state
             if done:
+                returns += [ep_return]
                 break
-    return total_reward
+    return np.mean(returns)
