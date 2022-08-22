@@ -40,7 +40,7 @@ ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
 
 
 @tree.command()
-def no_log(config_path: Path = DEFAULT_CONFIG):
+def no_log(config_path: Path = DEFAULT_CONFIG, render: bool = False):
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
     with config_path.open() as f:
@@ -48,7 +48,7 @@ def no_log(config_path: Path = DEFAULT_CONFIG):
 
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
-    return train(**config, logger=logger)
+    return train(**config, render=render, logger=logger)
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
@@ -105,7 +105,7 @@ def _log(
             name=name,
         )
     )  # todo: encapsulate in HasuraLogger
-    train(**kwargs, logger=logger)
+    train(**kwargs, logger=logger, render=False)
 
 
 def trainable(config: dict):

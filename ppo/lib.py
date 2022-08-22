@@ -30,7 +30,7 @@ import test_episodes
 from flax import linen as nn
 from flax.training import train_state
 from gym_minigrid.minigrid import MiniGridEnv
-from models import Conv, TwoLayer
+from models import Conv
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -321,6 +321,8 @@ def train(
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
     num_epochs: int,
+    # whether to render during testing
+    render: bool,
     # random seed
     seed: int,
     # Total number of frames seen during training.
@@ -339,6 +341,8 @@ def train(
       optimizer: the trained optimizer
     """
     console = Console()
+    if render:
+        num_agents = 1
 
     simulators = [
         agent.RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(num_agents)
@@ -351,9 +355,10 @@ def train(
 
     env = env_utils.create_env(env_id, test=False)
 
-    if "env_id" == "minigrid":
+    if env_id == "minigrid":
         num_actions = len(MiniGridEnv.Actions)
-        model = TwoLayer(num_outputs=num_actions)
+        # model = TwoLayer(num_outputs=num_actions)
+        model = Conv(num_outputs=num_actions)
     else:
         num_actions = env_utils.get_num_actions(env_id)
         model = Conv(num_outputs=num_actions)
@@ -388,6 +393,7 @@ def train(
                 env_id=env_id,
                 n_episodes=1,
                 params=state.params,
+                render=render,
                 seed=seed + step,
             )
             frames = step * num_agents * actor_steps

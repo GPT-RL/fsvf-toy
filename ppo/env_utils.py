@@ -23,15 +23,52 @@ from typing import Optional
 import gym
 import numpy as np
 import seed_rl_atari_preprocessing
+from art import text2art
 from gym import RewardWrapper  # type: ignore
 from gym.core import ObservationWrapper
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
 from gym_minigrid.wrappers import ImgObsWrapper, RGBImgObsWrapper
 from returns.curry import partial
-from returns.pipeline import flow
-from rich.pretty import pprint
+from returns.pipeline import flow, pipe
+from rich.console import Console
 from rich.text import Text
+
+
+class MyRGBImgObsWrapper(RGBImgObsWrapper):
+    def reset(self, seed: Optional[int] = None):
+        self.__action = None
+        self.__state = super().reset(seed=seed)
+        return self.__state
+
+    def step(self, action):
+        self.__action = action
+        self.__state, self.__reward, self.__done, i = super().step(action)
+        return self.__state, self.__reward, self.__done, i
+
+    def render(self, mode="human", highlight=True, tile_size=...):
+        if mode == "human":
+            rgb = self.__state["image"]
+            console.print(self.ascii_of_image(rgb))
+            subtitle = ""
+            if self.__action is not None:
+                if isinstance(self.__action, int):
+                    action_str = self.Actions(self.__action).name
+                elif isinstance(self.__action, str):
+                    action_str = self.__action
+                else:
+                    raise ValueError(f"Unknown action {self.__action}")
+                subtitle += f"action={action_str}, "
+            subtitle += f"reward={self.__reward}"
+            if self.__done:
+                subtitle += ", done"
+            print(text2art(subtitle.swapcase(), font="com_sen"))
+            input("Press enter to continue.")
+        else:
+            return super().render(mode=mode, highlight=highlight, tile_size=tile_size)
+
+
+console = Console()
 
 
 def join_text(*text: Text, joiner: str) -> Text:
@@ -122,15 +159,26 @@ class EmptyEnv(MiniGridEnv):
         )
 
     @staticmethod
-    def ascii_of_image(image: np.ndarray):
+    def ascii_of_image(image: np.ndarray) -> Text:
         def rows():
             for row in image:
-                yield join_text(
-                    *[
-                        Text("██", style=f"rgb({','.join(rgb.astype(int))})")
-                        for rgb in row
-                    ],
-                    joiner="",
+
+                def f(rgb):
+                    return Text("██", style=rgb)
+
+                yield flow(
+                    map(
+                        pipe(
+                            np.cast[int],
+                            partial(map, str),
+                            ",".join,
+                            lambda rgb: f"rgb({rgb})",
+                            f
+                            # lambda rgb: Text("██", style=rgb),
+                        ),
+                        row,
+                    ),
+                    lambda texts: join_text(*texts, joiner=""),
                 )
 
         return join_text(*rows(), joiner="\n")
@@ -156,30 +204,7 @@ class EmptyEnv(MiniGridEnv):
 
     def reset(self, seed: Optional[int] = None):
         seed = seed or 0
-        self.__action = self.__reward = self.__done = None
         return super().reset(seed=seed)
-
-    def step(self, action):
-        self.__action = action
-        state, self.__reward, self.__done, info = super().step(action)
-        return state, self.__reward, self.__done, info
-
-    def render(self, mode="human", highlight=True, tile_size=...):
-        if mode == "human":
-            print(self.ascii_of_image(self.render_obs()))
-            print()
-            subtitle = ""
-            if self.__action is not None:
-                subtitle += f", {self.__action.name.replace('_', ' ')}"
-            if self._reward is not None:
-                assert isinstance(self.__reward, float)
-                subtitle += f", r={round(self.__reward, 2)}"
-            if self.__done:
-                subtitle += ", done"
-            pprint(subtitle.swapcase())
-            input("Press enter to continue.")
-        else:
-            return super().render(mode=mode, highlight=highlight, tile_size=tile_size)
 
 
 class ClipRewardEnv(RewardWrapper):
@@ -238,11 +263,13 @@ def create_env(env_id: str, test: bool):
     """Create a FrameStack object that serves as environment for the `game`."""
     if env_id == "minigrid":
         return flow(
-            EmptyEnv(agent_start_pos=None),
-            ObsGoalWrapper,
-            FlatObsWrapper,
-            OneHotWrapper,
-            FlattenWrapper,
+            EmptyEnv(size=4, agent_start_pos=None),
+            MyRGBImgObsWrapper,
+            ImgObsWrapper
+            # ObsGoalWrapper,
+            # FlatObsWrapper,
+            # OneHotWrapper,
+            # FlattenWrapper,
         )
     elif "NoFrameskip" in env_id:
         return flow(
@@ -252,7 +279,11 @@ def create_env(env_id: str, test: bool):
             partial(FrameStack, num_frames=4),
         )
     elif "MiniGrid" in env_id:
-        return flow(gym.make(env_id), RGBImgObsWrapper, ImgObsWrapper)
+        return flow(
+            gym.make(env_id),
+            MyRGBImgObsWrapper,
+            ImgObsWrapper,
+        )
     else:
         raise ValueError(f"Unknown environment: {env_id}")
 

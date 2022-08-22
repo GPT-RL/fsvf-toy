@@ -28,6 +28,7 @@ def policy_test(
     env_id: str,
     n_episodes: int,
     params: flax.core.frozen_dict.FrozenDict,
+    render: bool,
     seed: int,
 ) -> np.float32:
     """Perform a test of the policy in Atari environment.
@@ -53,6 +54,8 @@ def policy_test(
             probabilities = probs[0] / probs[0].sum()
             action = test_env.np_random.choice(probs.shape[1], p=probabilities)
             obs, reward, done, _ = test_env.step(action)  # type: ignore
+            if render:
+                test_env.render(mode="human")
             ep_return += reward
             next_state = obs[None, ...] if not done else None
             state = next_state
