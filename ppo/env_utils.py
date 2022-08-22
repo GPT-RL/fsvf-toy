@@ -165,18 +165,21 @@ class EmptyEnv(MiniGridEnv):
         return state, self.__reward, self.__done, info
 
     def render(self, mode="human", highlight=True, tile_size=...):
-        print(self.ascii_of_image(self.render_obs()))
-        print()
-        subtitle = ""
-        if self.__action is not None:
-            subtitle += f", {self.__action.name.replace('_', ' ')}"
-        if self._reward is not None:
-            assert isinstance(self.__reward, float)
-            subtitle += f", r={round(self.__reward, 2)}"
-        if self.__done:
-            subtitle += ", done"
-        pprint(subtitle.swapcase())
-        input("Press enter to continue.")
+        if mode == "human":
+            print(self.ascii_of_image(self.render_obs()))
+            print()
+            subtitle = ""
+            if self.__action is not None:
+                subtitle += f", {self.__action.name.replace('_', ' ')}"
+            if self._reward is not None:
+                assert isinstance(self.__reward, float)
+                subtitle += f", r={round(self.__reward, 2)}"
+            if self.__done:
+                subtitle += ", done"
+            pprint(subtitle.swapcase())
+            input("Press enter to continue.")
+        else:
+            return super().render(mode=mode, highlight=highlight, tile_size=tile_size)
 
 
 class ClipRewardEnv(RewardWrapper):
