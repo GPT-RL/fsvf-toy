@@ -27,6 +27,9 @@ from gym import RewardWrapper  # type: ignore
 from gym.core import ObservationWrapper
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
+from gym_minigrid.wrappers import ImgObsWrapper, RGBImgObsWrapper
+from returns.curry import partial
+from returns.pipeline import flow
 from rich.pretty import pprint
 from rich.text import Text
 
@@ -231,19 +234,24 @@ class FrameStack:
 def create_env(env_id: str, test: bool):
     """Create a FrameStack object that serves as environment for the `game`."""
     if env_id == "minigrid":
-        env0 = EmptyEnv(agent_start_pos=None)
-        env1 = ObsGoalWrapper(env0)
-        env2 = FlatObsWrapper(env1)
-        env3 = OneHotWrapper(env2)
-        env4 = FlattenWrapper(env3)
-        return env4
+        return flow(
+            EmptyEnv(agent_start_pos=None),
+            ObsGoalWrapper,
+            FlatObsWrapper,
+            OneHotWrapper,
+            FlattenWrapper,
+        )
+    elif "NoFrameskip" in env_id:
+        return flow(
+            gym.make(env_id),
+            *([] if test else [ClipRewardEnv]),
+            seed_rl_atari_preprocessing.AtariPreprocessing,
+            partial(FrameStack, num_frames=4),
+        )
+    elif "MiniGrid" in env_id:
+        return flow(gym.make(env_id), RGBImgObsWrapper, ImgObsWrapper)
     else:
-        env = gym.make(env_id)
-        if not test:
-            env = ClipRewardEnv(env)  # bin rewards to {-1., 0., 1.}
-        preproc = seed_rl_atari_preprocessing.AtariPreprocessing(env)
-        stack = FrameStack(preproc, num_frames=4)
-        return stack
+        raise ValueError(f"Unknown environment: {env_id}")
 
 
 def get_num_actions(game: str):
