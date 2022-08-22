@@ -25,7 +25,7 @@
       overrides = pyfinal: pyprev: let
         inherit (pyprev) buildPythonPackage fetchPypi;
       in rec {
-        ale-py = pyprev.ale-py.overridePythonAttrs (old: let
+        ale-py = pyprev.ale-py.overridePythonAttrs (let
           roms = fetchTarball {
             url = "https://roms8.s3.us-east-2.amazonaws.com/Roms.tar.gz";
             sha256 = "sha256:0g9xffdm7zndf84m14f1j1x1v3ybm7ls7498071xlhah9k80bskq";
@@ -59,6 +59,10 @@
             tensorflow-datasets
           ];
         };
+        etils = pyprev.etils.overridePythonAttrs (old: {
+          propagatedBuildInputs =
+            builtins.filter (i: i.pname != "etils") old.propagatedBuildInputs;
+        });
         # Use cuda-enabled jaxlib as required
         jaxlib = pyprev.jaxlibWithCuda.override {
           inherit (pyprev) absl-py flatbuffers numpy scipy six;
@@ -87,7 +91,7 @@
           # Override the nixpkgs bin version instead of
           # poetry2nix version so that rpath is set correctly.
           pyprev.tensorflow-bin.overridePythonAttrs
-          (old: {inherit (pyprev.tensorflow-gpu) src version;});
+          {inherit (pyprev.tensorflow-gpu) src version;};
       };
       poetryArgs = {
         inherit python;

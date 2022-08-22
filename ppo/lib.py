@@ -15,8 +15,10 @@
 """Library file which executes the PPO training."""
 
 import functools
+import logging
 import time
-from typing import Any, Callable, List, Tuple
+from pathlib import Path
+from typing import Any, Callable, List, Optional, Tuple
 
 import agent
 import env_utils
@@ -28,7 +30,7 @@ import numpy as np
 import optax
 import test_episodes
 from flax import linen as nn
-from flax.training import train_state
+from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
 from models import Conv
 from rich.console import Console
@@ -313,7 +315,9 @@ def train(
     lambda_: float,
     # The learning rate for the Adam optimizer.
     learning_rate: float,
-    # number of steps between logs
+    # If not none, parameters will be loaded from this path.
+    load_dir: Optional[Path],
+    # number of updates between logs
     log_frequency: int,
     # logger for logging to Hasura
     logger: RunLogger,
@@ -323,6 +327,10 @@ def train(
     num_epochs: int,
     # whether to render during testing
     render: bool,
+    # directory to save model checkpoints in.
+    save_dir: str,
+    # number of updates between checkpoints.
+    save_frequency: int,
     # random seed
     seed: int,
     # Total number of frames seen during training.
@@ -379,8 +387,12 @@ def train(
         model=model,
         train_steps=loop_steps * num_epochs * iterations_per_step,
     )
-    # number of train iterations done by each train_step
+    if load_dir is not None:
+        logging.info("Loading model from %s", load_dir)
+        del initial_params
+        state = checkpoints.restore_checkpoint(load_dir, state)
 
+    save_count = 0
     start_step = int(state.step) // num_epochs // iterations_per_step
     start_time = time.time()
     console.log(f"Start training from step: {start_step}")
@@ -400,6 +412,7 @@ def train(
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,
                 "run ID": logger.run_id,
+                "save count": save_count,
             }
             console.log(log)
             if logger.run_id is not None:
@@ -433,4 +446,9 @@ def train(
                 vf_coeff=vf_coeff,
                 entropy_coeff=entropy_coeff,
             )
+        if save_frequency and ((step + 1) % save_frequency == 0):
+            checkpoints.save_checkpoint(
+                save_dir, target=state, step=step + 1, overwrite=True
+            )
+            save_count += 1
     return state

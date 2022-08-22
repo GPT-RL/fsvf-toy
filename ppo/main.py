@@ -15,6 +15,7 @@
 # See issue #620.
 # pytype: disable=wrong-keyword-args
 
+import logging
 import os
 import socket
 import sys
@@ -40,7 +41,11 @@ ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
 
 
 @tree.command()
-def no_log(config_path: Path = DEFAULT_CONFIG, render: bool = False):
+def no_log(
+    config_path: Path = DEFAULT_CONFIG,
+    load_dir: Optional[Path] = None,
+    render: bool = False,
+):
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
     with config_path.open() as f:
@@ -48,7 +53,15 @@ def no_log(config_path: Path = DEFAULT_CONFIG, render: bool = False):
 
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
-    return train(**config, render=render, logger=logger)
+    if config["save_frequency"] != 0:
+        logging.info("Setting save_frequency to 0.")
+    config.update(save_frequency=0)
+    return train(
+        **config,
+        load_dir=load_dir,
+        logger=logger,
+        render=render,
+    )
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
@@ -89,6 +102,7 @@ def _log(
     def xy():
         for x in ["step", "hours"]:
             yield x, "return"
+        yield "step", "save count"
 
     charts = [
         line.spec(color="run ID", x=x, y=y, visualizer_url=visualizer_url)
@@ -105,7 +119,7 @@ def _log(
             name=name,
         )
     )  # todo: encapsulate in HasuraLogger
-    train(**kwargs, logger=logger, render=False)
+    train(**kwargs, load_dir=None, logger=logger, render=False)
 
 
 def trainable(config: dict):

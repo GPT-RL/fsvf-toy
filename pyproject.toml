@@ -11,15 +11,17 @@ jax = "0.3.6"
 gym-minigrid = "^1.1.0"
 dollar-lambda = "^1.1.4"
 tensorflow-gpu = "^2.9.1"
-flax = "^0.5.3"
+flax = "0.5.2"
 GitPython = "^3.1.27"
-requests-toolbelt = "^0.9.1"
 ray = {version = "^1.13.0", extras = ["tune"]}
 run-logger = {git = "https://github.com/run-tracker/run-logger.git", rev = "main"}
 opencv-python = "^4.6.0"
 gym = {version = "^0.25.2", extras = ["atari"]}
 returns = "^0.19.0"
 art = "^5.7"
+tensorstore = "^0.1.22"
+numpy = "1.22.2"
+requests-toolbelt = "^0.9.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
@@ -31,9 +33,6 @@ mypy = "^0.971"
 flake8 = "^5.0.4"
 types-PyYAML = "^6.0.11"
 ale-py = "^0.7.5"
-
-[tool.poetry.scripts]
-main = 'ppo:ppo_main.main'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
