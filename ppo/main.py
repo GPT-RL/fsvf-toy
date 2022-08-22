@@ -24,14 +24,12 @@ from shlex import quote
 from typing import Any, Optional
 
 import line
-import models
 import ray
 import tensorflow as tf
 import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git.repo import Repo
-from gym_minigrid.minigrid import MiniGridEnv
-from ppo_lib import train
+from lib import train
 from ray import tune
 from run_logger import RunLogger, create_sweep
 
@@ -39,12 +37,6 @@ tree = CommandTree()
 DEFAULT_CONFIG = Path("config.yml")
 GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
-
-
-def main(**kwargs):
-    num_actions = len(MiniGridEnv.Actions)
-    model = models.TwoLayer(num_outputs=num_actions)
-    return train(model=model, **kwargs)
 
 
 @tree.command()
@@ -56,7 +48,7 @@ def no_log(config_path: Path = DEFAULT_CONFIG):
 
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
-    return main(**config, logger=logger)
+    return train(**config, logger=logger)
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
@@ -113,7 +105,7 @@ def _log(
             name=name,
         )
     )  # todo: encapsulate in HasuraLogger
-    main(**kwargs, logger=logger)
+    train(**kwargs, logger=logger)
 
 
 def trainable(config: dict):

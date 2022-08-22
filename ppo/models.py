@@ -18,7 +18,7 @@ import jax.numpy as jnp
 from flax import linen as nn
 
 
-class ActorCritic(nn.Module):
+class Conv(nn.Module):
     """Class defining the actor-critic model."""
 
     num_outputs: int

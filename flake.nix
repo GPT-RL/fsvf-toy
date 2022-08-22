@@ -17,19 +17,32 @@
           cudaSupport = true;
         };
       };
-      inherit (pkgs) poetry2nix;
+      inherit (pkgs) bash buildEnv cudaPackages dockerTools linuxPackages mkShell poetry2nix python39 stdenv;
       inherit (poetry2nix) mkPoetryApplication mkPoetryEnv;
-      inherit (pkgs.cudaPackages) cudatoolkit;
-      inherit (pkgs.linuxPackages) nvidia_x11;
-      python = pkgs.python39;
-      overrides = pyfinal: pyprev: rec {
+      inherit (cudaPackages) cudatoolkit;
+      inherit (linuxPackages) nvidia_x11;
+      python = python39;
+      overrides = pyfinal: pyprev: let
+        inherit (pyprev) buildPythonPackage fetchPypi;
+      in rec {
+        ale-py = pyprev.ale-py.overridePythonAttrs (old: let
+          roms = fetchTarball {
+            url = "https://roms8.s3.us-east-2.amazonaws.com/Roms.tar.gz";
+            sha256 = "sha256:0g9xffdm7zndf84m14f1j1x1v3ybm7ls7498071xlhah9k80bskq";
+          };
+        in {
+          postInstall = ''
+            export LD_LIBRARY_PATH=${stdenv.cc.cc.lib}/lib:$LD_LIBRARY_PATH
+            $out/bin/ale-import-roms ${roms}
+          '';
+        });
         astunparse = pyprev.astunparse.overridePythonAttrs (old: {
           buildInputs = (old.buildInputs or []) ++ [pyfinal.wheel];
         });
-        clu = pyprev.buildPythonPackage rec {
+        clu = buildPythonPackage rec {
           pname = "clu";
           version = "0.0.7";
-          src = pyprev.fetchPypi {
+          src = fetchPypi {
             inherit pname version;
             sha256 = "sha256-RJqa8XnDpcRPwYlH+4RKAOos0x4+3hMWf/bv6JNn2ys=";
           };
@@ -50,10 +63,10 @@
         jaxlib = pyprev.jaxlibWithCuda.override {
           inherit (pyprev) absl-py flatbuffers numpy scipy six;
         };
-        ml-collections = pyprev.buildPythonPackage rec {
+        ml-collections = buildPythonPackage rec {
           pname = "ml_collections";
           version = "0.1.1";
-          src = pyprev.fetchPypi {
+          src = fetchPypi {
             inherit pname version;
             sha256 = "sha256-P+/McuxDOqHl0yMHo+R0u7Z/QFvoFOpSohZr/J2+aMw=";
           };
@@ -91,7 +104,7 @@
         poetryEnv
       ];
     in rec {
-      devShell = pkgs.mkShell rec {
+      devShell = mkShell rec {
         inherit buildInputs;
         PYTHONFAULTHANDLER = 1;
         PYTHONBREAKPOINT = "ipdb.set_trace";
@@ -102,11 +115,11 @@
           set +o allexport
         '';
       };
-      packages.default = pkgs.dockerTools.buildImage {
+      packages.default = dockerTools.buildImage {
         name = "ppo";
         tag = "latest";
         copyToRoot =
-          pkgs.buildEnv
+          buildEnv
           {
             name = "image-root";
             pathsToLink = ["/bin" "ppo"];
@@ -119,7 +132,7 @@
             "LD_LIBRARY_PATH=/usr/lib64/"
             "PATH=/bin:$PATH"
           ];
-          Cmd = ["${pkgs.bash}/bin/bash"];
+          Cmd = ["${bash}/bin/bash"];
         };
       };
     };

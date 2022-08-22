@@ -16,14 +16,16 @@
 
 
 import operator
+from collections import deque
 from functools import reduce
 from typing import Optional
 
 import gym
 import numpy as np
+import seed_rl_atari_preprocessing
 from gym import RewardWrapper  # type: ignore
 from gym.core import ObservationWrapper
-from gym.spaces import Dict, Discrete, MultiBinary, MultiDiscrete
+from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
 from rich.pretty import pprint
 from rich.text import Text
@@ -188,14 +190,60 @@ class ClipRewardEnv(RewardWrapper):
         return np.sign(reward)
 
 
-def create_env():
+class FrameStack:
+    """Implements stacking of `num_frames` last frames of the game.
+    Wraps an AtariPreprocessing object.
+    """
+
+    def __init__(
+        self, preproc: seed_rl_atari_preprocessing.AtariPreprocessing, num_frames: int
+    ):
+        self.preproc = preproc
+        self.num_frames = num_frames
+        self.frames: deque = deque(maxlen=num_frames)
+        assert isinstance(preproc.observation_space, Box)
+
+        def repeat(x):
+            return np.repeat(x, num_frames, axis=-1)
+
+        obs_space = preproc.observation_space
+        self.observation_space = Box(
+            low=repeat(obs_space.low), high=repeat(obs_space.high)
+        )
+        self.np_random = preproc.environment.np_random
+
+    def reset(self, seed: Optional[int] = None):
+        ob = self.preproc.reset(seed=seed)
+        for _ in range(self.num_frames):
+            self.frames.append(ob)
+        return self._get_array()
+
+    def step(self, action: int):
+        ob, reward, done, info = self.preproc.step(action)
+        self.frames.append(ob)
+        return self._get_array(), reward, done, info
+
+    def _get_array(self):
+        assert len(self.frames) == self.num_frames
+        return np.concatenate(self.frames, axis=-1)
+
+
+def create_env(env_id: str, test: bool):
     """Create a FrameStack object that serves as environment for the `game`."""
-    env = EmptyEnv(agent_start_pos=None)
-    env = ObsGoalWrapper(env)
-    env = FlatObsWrapper(env)
-    env = OneHotWrapper(env)
-    env = FlattenWrapper(env)
-    return env
+    if env_id == "minigrid":
+        env0 = EmptyEnv(agent_start_pos=None)
+        env1 = ObsGoalWrapper(env0)
+        env2 = FlatObsWrapper(env1)
+        env3 = OneHotWrapper(env2)
+        env4 = FlattenWrapper(env3)
+        return env4
+    else:
+        env = gym.make(env_id)
+        if not test:
+            env = ClipRewardEnv(env)  # bin rewards to {-1., 0., 1.}
+        preproc = seed_rl_atari_preprocessing.AtariPreprocessing(env)
+        stack = FrameStack(preproc, num_frames=4)
+        return stack
 
 
 def get_num_actions(game: str):

@@ -30,6 +30,8 @@
 Adapted from SEED RL, originally adapted from Dopamine.
 """
 
+from typing import Optional
+
 import cv2
 import numpy as np
 from gym.spaces.box import Box
@@ -137,13 +139,13 @@ class AtariPreprocessing:
             if game_over:
                 self.environment.reset()
 
-    def reset(self):
+    def reset(self, seed: Optional[int] = None):
         """Resets the environment.
         Returns:
           observation: numpy array, the initial observation emitted by the
             environment.
         """
-        self.environment.reset()
+        self.environment.reset(seed=seed)
         self.apply_random_noops()
 
         self.lives = self.environment.ale.lives()

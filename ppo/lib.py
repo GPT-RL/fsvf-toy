@@ -24,12 +24,13 @@ import flax
 import jax
 import jax.numpy as jnp
 import jax.random
-import models
 import numpy as np
 import optax
 import test_episodes
 from flax import linen as nn
 from flax.training import train_state
+from gym_minigrid.minigrid import MiniGridEnv
+from models import Conv, TwoLayer
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -304,6 +305,8 @@ def train(
     decaying_lr_and_clip_param: bool,
     # Weight of entropy bonus in the total loss.
     entropy_coeff: float,
+    # id to pass to gym.make
+    env_id: str,
     # RL discount parameter.
     gamma: float,
     # Generalized Advantage Estimation parameter.
@@ -314,8 +317,6 @@ def train(
     log_frequency: int,
     # logger for logging to Hasura
     logger: RunLogger,
-    # Architecture for producing policy and value estimates
-    model: models.TwoLayer,
     # Number of agents playing in parallel.
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
@@ -339,14 +340,25 @@ def train(
     """
     console = Console()
 
-    simulators = [agent.RemoteSimulator(seed + i) for i in range(num_agents)]
+    simulators = [
+        agent.RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(num_agents)
+    ]
     loop_steps = total_frames // (num_agents * actor_steps)
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
     # train steps and the inner number of optimizer steps
     iterations_per_step = num_agents * actor_steps // batch_size
 
-    obs_shape = env_utils.create_env().observation_space.shape
+    env = env_utils.create_env(env_id, test=False)
+
+    if "env_id" == "minigrid":
+        num_actions = len(MiniGridEnv.Actions)
+        model = TwoLayer(num_outputs=num_actions)
+    else:
+        num_actions = env_utils.get_num_actions(env_id)
+        model = Conv(num_outputs=num_actions)
+
+    obs_shape = env.observation_space.shape
     assert obs_shape is not None
     rng = np.random.default_rng(seed)
     key = jax.random.PRNGKey(seed)
@@ -373,6 +385,7 @@ def train(
         if step % log_frequency == 0:
             test_return = test_episodes.policy_test(
                 apply_fn=state.apply_fn,
+                env_id=env_id,
                 n_episodes=1,
                 params=state.params,
                 seed=seed + step,
