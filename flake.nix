@@ -126,8 +126,8 @@
           buildEnv
           {
             name = "image-root";
-            pathsToLink = ["/bin" "ppo"];
-            paths = buildInputs ++ [./ppo];
+            pathsToLink = ["/bin" "/ppo"];
+            paths = buildInputs ++ [pkgs.git ./.];
           };
         config = {
           Env = with pkgs; [
@@ -136,7 +136,7 @@
             "LD_LIBRARY_PATH=/usr/lib64/"
             "PATH=/bin:$PATH"
           ];
-          Cmd = ["${poetryEnv}/bin/python"];
+          Cmd = ["${poetryEnv.python}/bin/python"];
         };
       };
     };

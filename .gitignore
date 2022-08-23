@@ -8,5 +8,6 @@ result
 .env
 .idea/
 config.yml
+ppo/config.yml
 .vscode/
 Roms.rar
