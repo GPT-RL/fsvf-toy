@@ -383,7 +383,7 @@ def create_env(env_id: str, test: bool):
     elif "MiniGrid" in env_id:
         return flow(gym.make(env_id), RGBImgObsWrapper, ImgObsWrapper, RenderWrapper)
     else:
-        raise ValueError(f"Unknown environment: {env_id}")
+        return gym.make(env_id)
 
 
 def get_num_actions(game: str):
