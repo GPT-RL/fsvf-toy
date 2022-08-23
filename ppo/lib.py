@@ -459,7 +459,10 @@ def train(
             )
         if save_frequency and ((step + 1) % save_frequency == 0):
             checkpoints.save_checkpoint(
-                save_dir, target=state, step=step + 1, overwrite=True
+                Path(save_dir, str(logger.run_id)),
+                target=state,
+                step=step + 1,
+                overwrite=True,
             )
             save_count += 1
     return state
