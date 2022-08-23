@@ -47,23 +47,30 @@ class RenderWrapper(gym.Wrapper):
         self.__state, self.__reward, self.__done, i = super().step(action)
         return self.__state, self.__reward, self.__done, i
 
-    @staticmethod
-    def ascii_of_image(image: np.ndarray) -> Text:
+    def scale_channel(self, channel):
+        if isinstance(self.observation_space, Box):
+            high = self.observation_space.high.max()
+        elif isinstance(self.observation_space, MultiDiscrete):
+            high = self.observation_space.nvec.max()
+        elif isinstance(self.observation_space, MultiBinary):
+            high = 1
+        else:
+            raise ValueError(f"Unknown observation space {self.observation_space}")
+
+        return 255 * (channel / high)[:3]
+
+    def ascii_of_image(self, image: np.ndarray) -> Text:
         def rows():
             for row in image:
-
-                def f(rgb):
-                    return Text("██", style=rgb)
-
                 yield flow(
                     map(
                         pipe(
+                            self.scale_channel,
                             np.cast[int],
                             partial(map, str),
                             ",".join,
                             lambda rgb: f"rgb({rgb})",
-                            f
-                            # lambda rgb: Text("██", style=rgb),
+                            lambda rgb: Text("██", style=rgb),
                         ),
                         row,
                     ),
@@ -79,7 +86,11 @@ class RenderWrapper(gym.Wrapper):
             subtitle = ""
             if self.__action is not None:
                 if isinstance(self.__action, int):
-                    action_str = self.Actions(self.__action).name
+                    action = self.__action
+                    try:
+                        action_str = self.Actions(action).name
+                    except AttributeError:
+                        action_str = str(action)
                 elif isinstance(self.__action, str):
                     action_str = self.__action
                 else:
@@ -372,6 +383,7 @@ def create_env(env_id: str, test: bool):
             MyEnv(height=2, width=2),
             TwoDGridWrapper,
             OneHotWrapper,
+            RenderWrapper,
         )
     elif "NoFrameskip" in env_id:
         return flow(
@@ -379,6 +391,7 @@ def create_env(env_id: str, test: bool):
             *([] if test else [ClipRewardEnv]),
             seed_rl_atari_preprocessing.AtariPreprocessing,
             partial(FrameStack, num_frames=4),
+            RenderWrapper,
         )
     elif "MiniGrid" in env_id:
         return flow(gym.make(env_id), RGBImgObsWrapper, ImgObsWrapper, RenderWrapper)
