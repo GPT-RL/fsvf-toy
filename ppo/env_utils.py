@@ -29,6 +29,7 @@ from art import text2art
 from gym import RewardWrapper, Space  # type: ignore
 from gym.core import ObservationWrapper
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
+from gym.wrappers.time_limit import TimeLimit
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
 from gym_minigrid.wrappers import ImgObsWrapper, RGBImgObsWrapper
 from returns.curry import partial
@@ -379,11 +380,13 @@ def create_env(env_id: str, test: bool):
         )
     elif re.match(MyEnv.pattern, env_id):
         [(width, height)] = re.findall(MyEnv.pattern, env_id)
+        width, height = map(int, (width, height))
         return flow(
-            MyEnv(height=int(height), width=int(width)),
+            MyEnv(height=height, width=width),
             TwoDGridWrapper,
             OneHotWrapper,
             RenderWrapper,
+            partial(TimeLimit, max_episode_steps=1 + height + width),
         )
     elif "NoFrameskip" in env_id:
         return flow(
