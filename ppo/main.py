@@ -22,7 +22,7 @@ import sys
 import time
 from pathlib import Path
 from shlex import quote
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 import line
 import ray
@@ -38,6 +38,31 @@ tree = CommandTree()
 DEFAULT_CONFIG = Path("config.yml")
 GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
+
+
+def param_generator(params: Any):
+    if isinstance(params, Mapping):
+        if tuple(params.keys()) == ("",):
+            yield from param_generator(params[""])
+            return
+        if not params:
+            yield {}
+        else:
+            (key, value), *params = params.items()
+            for choice in param_generator(value):
+                for other_choices in param_generator(dict(params)):
+                    yield {key: choice, **other_choices}
+    elif isinstance(params, (list, tuple)):
+        for choices in params:
+            yield from param_generator(choices)
+    else:
+        yield params
+
+
+def no_sweep(**kwargs):
+    for params in param_generator(kwargs):
+        train(**params)
+        logging.info("Done!")
 
 
 @tree.command()
@@ -56,7 +81,7 @@ def no_log(
     if config["save_frequency"] != 0:
         logging.info("Setting save_frequency to 0.")
     config.update(save_frequency=0)
-    return train(
+    return no_sweep(
         **config,
         load_dir=load_dir,
         logger=logger,
@@ -119,7 +144,9 @@ def _log(
             name=name,
         )
     )  # todo: encapsulate in HasuraLogger
-    train(**kwargs, load_dir=None, logger=logger, render=False)
+    (no_sweep if sweep_id is None else train)(
+        **kwargs, load_dir=None, logger=logger, render=False
+    )
 
 
 def trainable(config: dict):

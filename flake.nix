@@ -136,7 +136,7 @@
             "LD_LIBRARY_PATH=/usr/lib64/"
             "PATH=/bin:$PATH"
           ];
-          Cmd = ["${bash}/bin/bash"];
+          Cmd = ["${poetryEnv}/bin/python"];
         };
       };
     };
