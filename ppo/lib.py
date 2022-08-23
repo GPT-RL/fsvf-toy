@@ -32,7 +32,7 @@ import test_episodes
 from flax import linen as nn
 from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
-from models import Conv
+from models import OneHotConv, RGBConv
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -363,13 +363,21 @@ def train(
 
     env = env_utils.create_env(env_id, test=False)
 
-    if env_id == "minigrid":
+    if env_id == "empty":
         num_actions = len(MiniGridEnv.Actions)
         # model = TwoLayer(num_outputs=num_actions)
-        model = Conv(num_outputs=num_actions)
-    else:
+        model = RGBConv(num_outputs=num_actions)
+    elif env_id == "my":
+        num_actions = env_utils.MyEnv.action_space.n
+        model = OneHotConv(num_outputs=num_actions)
+    elif "NoFrameskip" in env_id:
         num_actions = env_utils.get_num_actions(env_id)
-        model = Conv(num_outputs=num_actions)
+        model = RGBConv(num_outputs=num_actions)
+    elif "MiniGrid" in env_id:
+        num_actions = env_utils.get_num_actions(env_id)
+        model = RGBConv(num_outputs=num_actions)
+    else:
+        raise ValueError(f"Unknown environment: {env_id}")
 
     obs_shape = env.observation_space.shape
     assert obs_shape is not None

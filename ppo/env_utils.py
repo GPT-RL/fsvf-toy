@@ -17,14 +17,15 @@
 
 import operator
 from collections import deque
+from dataclasses import dataclass
 from functools import reduce
-from typing import Optional
+from typing import Any, Optional
 
 import gym
 import numpy as np
 import seed_rl_atari_preprocessing
 from art import text2art
-from gym import RewardWrapper  # type: ignore
+from gym import RewardWrapper, Space  # type: ignore
 from gym.core import ObservationWrapper
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
@@ -119,21 +120,39 @@ class ObsGoalWrapper(ObservationWrapper):
 class FlatObsWrapper(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
-
         assert isinstance(self.observation_space, Dict)
-        spaces = self.observation_space.spaces
-        agent_space = spaces["agent"]
-        dir_space = spaces["direction"]
-        goal_space = spaces["goal"]
-        assert isinstance(agent_space, MultiDiscrete)
-        assert isinstance(dir_space, Discrete)
-        assert isinstance(goal_space, MultiDiscrete)
-        self.observation_space = MultiDiscrete(
-            np.array([*agent_space.nvec, dir_space.n, *goal_space.nvec])
+        self.observation_space = flow(
+            self.observation_space.spaces,
+            self.get_nvecs,
+            np.array,
+            MultiDiscrete,
         )
 
+    def get_nvecs(self, spaces: dict[str, Space]):
+        agent_space = spaces["agent"]
+        goal_space = spaces["goal"]
+        assert isinstance(agent_space, MultiDiscrete)
+        assert isinstance(goal_space, MultiDiscrete)
+        return [
+            *agent_space.nvec,
+            *goal_space.nvec,
+        ]
+
+    def get_observations(self, obs: dict[str, Any]) -> list[np.ndarray]:
+        return [obs["agent"], obs["goal"]]
+
     def observation(self, obs):
-        return np.concatenate([obs["agent"], np.array([obs["direction"]]), obs["goal"]])
+        return np.concatenate(self.get_observations(obs))
+
+
+class FlatObsWithDirectionWrapper(FlatObsWrapper):
+    def get_nvecs(self, spaces: dict[str, Space]):
+        dir_space = spaces["direction"]
+        assert isinstance(dir_space, Discrete)
+        return super().get_nvecs(spaces) + [np.array([dir_space.n])]
+
+    def get_observations(self, obs: dict[str, Any]) -> list[np.ndarray]:
+        return super().get_observations(obs) + [np.array(obs["direction"])]
 
 
 class OneHotWrapper(ObservationWrapper):
@@ -159,6 +178,21 @@ class FlattenWrapper(ObservationWrapper):
 
     def observation(self, obs):
         return obs.flatten()
+
+
+class TwoDGridWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        assert hasattr(env, "height")
+        assert hasattr(env, "width")
+        self.empty = np.zeros((env.height, env.width), dtype=np.int)
+        self.observation_space = MultiDiscrete(3 * np.ones((env.height, env.width)))
+
+    def observation(self, obs: dict[str, np.ndarray]) -> np.ndarray:
+        grid = np.copy(self.empty)
+        grid[tuple(obs["agent"])] = 1
+        grid[tuple(obs["goal"])] = 2
+        return grid
 
 
 class EmptyEnv(MiniGridEnv):
@@ -205,6 +239,71 @@ class EmptyEnv(MiniGridEnv):
     def reset(self, seed: Optional[int] = None):
         seed = seed or 0
         return super().reset(seed=seed)
+
+
+@dataclass
+class MyEnv(gym.Env):
+    height: int
+    width: int
+
+    def __post_init__(self):
+        self.observation_space = Dict(
+            dict(
+                agent=MultiDiscrete(np.array([self.width, self.height])),
+                goal=MultiDiscrete(np.array([self.width, self.height])),
+            )
+        )
+
+    @classmethod
+    @property
+    def action_space(cls):
+        return Discrete(1 + len(cls.deltas()))
+
+    @staticmethod
+    def deltas():
+        return np.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+
+    def random_pos(self) -> np.ndarray:
+        pos = self.np_random.randint(low=0, high=(self.width, self.height))
+        assert isinstance(pos, np.ndarray)
+        return pos
+
+    def reset(self, **kwargs) -> dict[str, np.ndarray]:
+        super().reset(**kwargs)
+        self.agent = self.random_pos()
+        self.goal = self.random_pos()
+        return self.state()
+
+    def state(self) -> dict[str, np.ndarray]:
+        return dict(agent=self.agent, goal=self.goal)
+
+    def step(self, action: int) -> tuple[dict[str, np.ndarray], float, bool, dict]:
+        r = 0.0
+        t = False
+        try:
+            delta = self.deltas()[action]
+        except IndexError:
+            r = float(all(self.agent == self.goal))
+            t = True
+            return self.state(), r, t, {}
+
+        agent = self.agent + delta
+        self.agent = np.clip(agent, 0, (self.width - 1, self.height - 1))
+        return self.state(), r, t, {}
+
+    def render(self, mode: Any = ...) -> None:
+        for y in range(self.height):
+            for x in range(self.width):
+                if all(self.agent == np.array([x, y])):
+                    print("A", end="")
+                elif all(self.goal == np.array([x, y])):
+                    print("G", end="")
+                else:
+                    print("-", end="")
+            print()
+
+        input("Press Enter to continue...")
+        return None
 
 
 class ClipRewardEnv(RewardWrapper):
@@ -261,16 +360,18 @@ class FrameStack:
 
 def create_env(env_id: str, test: bool):
     """Create a FrameStack object that serves as environment for the `game`."""
-    if env_id == "minigrid":
+    if env_id == "empty":
         return flow(
             EmptyEnv(size=4, agent_start_pos=None),
             RGBImgObsWrapper,
             ImgObsWrapper,
-            RenderWrapper
-            # ObsGoalWrapper,
-            # FlatObsWrapper,
-            # OneHotWrapper,
-            # FlattenWrapper,
+            RenderWrapper,
+        )
+    elif env_id == "my":
+        return flow(
+            MyEnv(height=2, width=2),
+            TwoDGridWrapper,
+            OneHotWrapper,
         )
     elif "NoFrameskip" in env_id:
         return flow(
