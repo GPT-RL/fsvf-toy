@@ -15,6 +15,7 @@
 """Library file which executes the PPO training."""
 
 import functools
+import itertools
 import logging
 import re
 import time
@@ -35,7 +36,7 @@ from gym_minigrid.minigrid import MiniGridEnv
 from jax.tree_util import tree_map
 from models import OneHotConv, RGBConv, TwoLayer
 from returns.curry import partial
-from returns.pipeline import pipe
+from returns.pipeline import flow, pipe
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -187,15 +188,13 @@ def get_experience(
     rng: np.random.Generator,
     simulators: List[agent.RemoteSimulator],
     state: train_state.TrainState,
-    steps_per_actor: int,
 ):
     """Collect experience from agents.
 
     Runs `steps_per_actor` time steps of the game for each of the `simulators`.
     """
-    all_experience = []
     # Range up to steps_per_actor + 1 to get one more value needed for GAE.
-    for _ in range(steps_per_actor + 1):
+    while True:
         sim_states = []
         for sim in simulators:
             sim_state = sim.conn.recv()
@@ -217,8 +216,7 @@ def get_experience(
             log_prob = log_probs[i][action]
             sample = agent.ExpTuple(sim_state, action, reward, value, log_prob, done)
             experiences.append(sample)
-        all_experience.append(experiences)
-    return all_experience
+        yield experiences
 
 
 def process_experience(
@@ -330,8 +328,8 @@ def train(
     num_epochs: int,
     # Number of agents to run tests on.
     num_test_agents: int,
-    # Number of steps to run test agents for.
-    num_test_steps: int,
+    # Number of episodes to run test agents for.
+    num_test_episodes: int,
     # whether to render during testing
     render: bool,
     # directory to save model checkpoints in.
@@ -400,32 +398,41 @@ def train(
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-            test_experiences = get_experience(
-                rng=test_rng,
-                simulators=test_simulators,
-                state=state,
-                steps_per_actor=num_test_steps,
+
+            def sum_exp(projection) -> Callable[[list[agent.ExpTuple]], int]:
+                return pipe(partial(map, projection), sum)
+
+            def acc_func(
+                acc: "list[agent.ExpTuple] | tuple[float, int]",
+                new: list[agent.ExpTuple],
+            ):
+                sum_done = sum_exp(lambda e: e.done)
+                sum_rewards = sum_exp(lambda e: e.reward)
+                if isinstance(acc, list):
+                    returns = 0.0
+                    episodes = sum_done(acc)
+                else:
+                    returns, episodes = acc
+                    assert isinstance(episodes, int)
+                returns += sum_rewards(new)
+                episodes += sum_done(new)
+                return returns, episodes
+
+            def pred(
+                acc: "list[agent.ExpTuple] | tuple[float, int]",
+            ):
+                if isinstance(acc, list):
+                    return True
+                _, episodes = acc
+                assert isinstance(episodes, int)
+                return episodes < num_test_episodes
+
+            *_, (total_return, episodes) = flow(
+                get_experience(rng=test_rng, simulators=test_simulators, state=state),
+                lambda exp: itertools.accumulate(exp, acc_func),
+                partial(itertools.takewhile, pred),
             )
-
-            def to_array(
-                projection: Callable[[agent.ExpTuple], float]
-            ) -> Callable[[list[agent.ExpTuple]], np.ndarray]:
-                return pipe(
-                    partial(tree_map, projection),  # apply projection to each ExpTuple
-                    np.array,  # combine result into an array
-                )
-
-            sum_component = pipe(
-                to_array,
-                lambda f: map(f, test_experiences),
-                sum,
-            )
-            returns = sum_component(lambda ts: ts.reward)
-            dones = sum_component(lambda ts: ts.done)
-            returns = returns[dones > 0]
-            dones = dones[dones > 0]
-            test_return = np.mean(returns / dones)
-
+            test_return = total_return / episodes
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,
@@ -438,11 +445,10 @@ def train(
 
         # Core training code.
         alpha = 1.0 - step / loop_steps if decaying_lr_and_clip_param else 1.0
-        all_experiences = get_experience(
-            rng=rng,
-            simulators=simulators,
-            state=state,
-            steps_per_actor=actor_steps,
+        all_experiences = flow(
+            get_experience(rng=rng, simulators=simulators, state=state),
+            lambda exp: itertools.islice(exp, actor_steps + 1),
+            list,
         )
         trajectories = process_experience(
             actor_steps=actor_steps,
