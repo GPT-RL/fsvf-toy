@@ -26,7 +26,7 @@ import numpy as np
 def policy_test(
     apply_fn: Callable[..., Any],
     env_id: str,
-    n_episodes: int,
+    num_test_episodes: int,
     params: flax.core.frozen_dict.FrozenDict,
     render: bool,
     seed: int,
@@ -44,7 +44,7 @@ def policy_test(
     """
     test_env = env_utils.create_env(env_id=env_id, test=True)
     returns: list[float] = []
-    for i in range(n_episodes):
+    for i in range(num_test_episodes):
         obs = test_env.reset(seed=seed + i)
         if render:
             test_env.render(mode="human")

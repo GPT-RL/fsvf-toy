@@ -326,6 +326,8 @@ def train(
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
     num_epochs: int,
+    # Number of episodes to average returns across during testing.
+    num_test_episodes: int,
     # whether to render during testing
     render: bool,
     # directory to save model checkpoints in.
@@ -412,7 +414,7 @@ def train(
             test_return = test_episodes.policy_test(
                 apply_fn=state.apply_fn,
                 env_id=env_id,
-                n_episodes=1,
+                num_test_episodes=num_test_episodes,
                 params=state.params,
                 render=render,
                 seed=seed + step,
