@@ -38,7 +38,7 @@ from rich.text import Text
 
 class RenderWrapper(gym.Wrapper):
     def reset(self, seed: Optional[int] = None):
-        self.__action = None
+        self.__action, self.__reward, self.__done = None, None, None
         self.__state = super().reset(seed=seed)
         return self.__state
 

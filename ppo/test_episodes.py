@@ -46,6 +46,8 @@ def policy_test(
     returns: list[float] = []
     for i in range(n_episodes):
         obs = test_env.reset(seed=seed + i)
+        if render:
+            test_env.render(mode="human")
         state = obs[None, ...]  # type: ignore # add batch dimension
         ep_return = 0.0
         for t in itertools.count():
