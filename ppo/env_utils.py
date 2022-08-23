@@ -35,7 +35,7 @@ from rich.console import Console
 from rich.text import Text
 
 
-class MyRGBImgObsWrapper(RGBImgObsWrapper):
+class RenderWrapper(gym.Wrapper):
     def reset(self, seed: Optional[int] = None):
         self.__action = None
         self.__state = super().reset(seed=seed)
@@ -46,9 +46,34 @@ class MyRGBImgObsWrapper(RGBImgObsWrapper):
         self.__state, self.__reward, self.__done, i = super().step(action)
         return self.__state, self.__reward, self.__done, i
 
+    @staticmethod
+    def ascii_of_image(image: np.ndarray) -> Text:
+        def rows():
+            for row in image:
+
+                def f(rgb):
+                    return Text("██", style=rgb)
+
+                yield flow(
+                    map(
+                        pipe(
+                            np.cast[int],
+                            partial(map, str),
+                            ",".join,
+                            lambda rgb: f"rgb({rgb})",
+                            f
+                            # lambda rgb: Text("██", style=rgb),
+                        ),
+                        row,
+                    ),
+                    lambda texts: join_text(*texts, joiner=""),
+                )
+
+        return join_text(*rows(), joiner="\n")
+
     def render(self, mode="human", highlight=True, tile_size=...):
         if mode == "human":
-            rgb = self.__state["image"]
+            rgb = self.__state
             console.print(self.ascii_of_image(rgb))
             subtitle = ""
             if self.__action is not None:
@@ -158,31 +183,6 @@ class EmptyEnv(MiniGridEnv):
             **kwargs,
         )
 
-    @staticmethod
-    def ascii_of_image(image: np.ndarray) -> Text:
-        def rows():
-            for row in image:
-
-                def f(rgb):
-                    return Text("██", style=rgb)
-
-                yield flow(
-                    map(
-                        pipe(
-                            np.cast[int],
-                            partial(map, str),
-                            ",".join,
-                            lambda rgb: f"rgb({rgb})",
-                            f
-                            # lambda rgb: Text("██", style=rgb),
-                        ),
-                        row,
-                    ),
-                    lambda texts: join_text(*texts, joiner=""),
-                )
-
-        return join_text(*rows(), joiner="\n")
-
     def _gen_grid(self, width, height):
         # Create an empty grid
         self.grid = Grid(width, height)
@@ -264,8 +264,9 @@ def create_env(env_id: str, test: bool):
     if env_id == "minigrid":
         return flow(
             EmptyEnv(size=4, agent_start_pos=None),
-            MyRGBImgObsWrapper,
-            ImgObsWrapper
+            RGBImgObsWrapper,
+            ImgObsWrapper,
+            RenderWrapper
             # ObsGoalWrapper,
             # FlatObsWrapper,
             # OneHotWrapper,
@@ -279,11 +280,7 @@ def create_env(env_id: str, test: bool):
             partial(FrameStack, num_frames=4),
         )
     elif "MiniGrid" in env_id:
-        return flow(
-            gym.make(env_id),
-            MyRGBImgObsWrapper,
-            ImgObsWrapper,
-        )
+        return flow(gym.make(env_id), RGBImgObsWrapper, ImgObsWrapper, RenderWrapper)
     else:
         raise ValueError(f"Unknown environment: {env_id}")
 
