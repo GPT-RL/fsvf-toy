@@ -29,11 +29,13 @@ import jax.numpy as jnp
 import jax.random
 import numpy as np
 import optax
-import test_episodes
 from flax import linen as nn
 from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
+from jax.tree_util import tree_map
 from models import OneHotConv, RGBConv, TwoLayer
+from returns.curry import partial
+from returns.pipeline import pipe
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -167,7 +169,7 @@ def train_step(
       loss: loss summed over training steps
     """
     iterations = trajectories[0].shape[0] // batch_size
-    trajectories = jax.tree_util.tree_map(
+    trajectories = tree_map(
         lambda x: x.reshape((iterations, batch_size) + x.shape[1:]), trajectories
     )
     loss = 0.0
@@ -326,8 +328,10 @@ def train(
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
     num_epochs: int,
-    # Number of episodes to average returns across during testing.
-    num_test_episodes: int,
+    # Number of agents to run tests on.
+    num_test_agents: int,
+    # Number of steps to run test agents for.
+    num_test_steps: int,
     # whether to render during testing
     render: bool,
     # directory to save model checkpoints in.
@@ -355,9 +359,12 @@ def train(
     if render:
         num_agents = 1
 
-    simulators = [
-        agent.RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(num_agents)
-    ]
+    def get_simulators(n: int):
+        return [agent.RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(n)]
+
+    simulators = get_simulators(num_agents)
+    test_simulators = get_simulators(num_test_agents)
+
     loop_steps = total_frames // (num_agents * actor_steps)
     # train_step does multiple steps per call for better performance
     # compute number of steps per call here to convert between the number of
@@ -385,6 +392,7 @@ def train(
     obs_shape = env.observation_space.shape
     assert obs_shape is not None
     rng = np.random.default_rng(seed)
+    test_rng = np.random.default_rng(seed)
     key = jax.random.PRNGKey(seed)
     initial_params = get_initial_params(
         input_dims=obs_shape,
@@ -411,14 +419,32 @@ def train(
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-            test_return = test_episodes.policy_test(
-                apply_fn=state.apply_fn,
-                env_id=env_id,
-                num_test_episodes=num_test_episodes,
-                params=state.params,
-                render=render,
-                seed=seed + step,
+            test_experiences = get_experience(
+                rng=test_rng,
+                simulators=test_simulators,
+                state=state,
+                steps_per_actor=num_test_steps,
             )
+
+            def to_array(
+                projection: Callable[[agent.ExpTuple], float]
+            ) -> Callable[[list[agent.ExpTuple]], np.ndarray]:
+                return pipe(
+                    partial(tree_map, projection),  # apply projection to each ExpTuple
+                    np.array,  # combine result into an array
+                )
+
+            sum_component = pipe(
+                to_array,
+                lambda f: map(f, test_experiences),
+                sum,
+            )
+            returns = sum_component(lambda ts: ts.reward)
+            dones = sum_component(lambda ts: ts.done)
+            returns = returns[dones > 0]
+            dones = dones[dones > 0]
+            test_return = np.mean(returns / dones)
+
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,

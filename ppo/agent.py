@@ -14,9 +14,9 @@
 
 """Agent utilities, incl. choosing the move and running in separate process."""
 
-import collections
 import functools
 import multiprocessing
+from dataclasses import dataclass
 from typing import Any, Callable
 
 import env_utils
@@ -45,9 +45,19 @@ def policy_action(
     return out
 
 
-ExpTuple = collections.namedtuple(
-    "ExpTuple", ["state", "action", "reward", "value", "log_prob", "done"]
-)
+@dataclass
+class ExpTuple:
+    state: np.ndarray
+    action: Any
+    reward: float
+    value: float
+    log_prob: float
+    done: bool
+
+
+#      = collections.namedtuple(
+#     "ExpTuple", ["state", "action", "reward", "value", "log_prob", "done"]
+# )
 
 
 class RemoteSimulator:
