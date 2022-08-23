@@ -365,50 +365,31 @@ def train(
     simulators = get_simulators(num_agents)
     test_simulators = get_simulators(num_test_agents)
 
-    loop_steps = total_frames // (num_agents * actor_steps)
-    # train_step does multiple steps per call for better performance
-    # compute number of steps per call here to convert between the number of
-    # train steps and the inner number of optimizer steps
-    iterations_per_step = num_agents * actor_steps // batch_size
-
+    loop_steps, iterations_per_step = compute_step_values(
+        actor_steps=actor_steps,
+        batch_size=batch_size,
+        num_agents=num_agents,
+        total_frames=total_frames,
+    )
     env = env_utils.create_env(env_id, test=False)
-
-    if env_id == "empty":
-        num_actions = len(MiniGridEnv.Actions)
-        model = RGBConv(num_outputs=num_actions)
-    elif re.match(env_utils.MyEnv.pattern, env_id):
-        num_actions = env_utils.MyEnv.action_space.n
-        model = OneHotConv(num_outputs=num_actions)
-    elif "NoFrameskip" in env_id:
-        num_actions = env_utils.get_num_actions(env_id)
-        model = RGBConv(num_outputs=num_actions)
-    elif "MiniGrid" in env_id:
-        num_actions = env_utils.get_num_actions(env_id)
-        model = RGBConv(num_outputs=num_actions)
-    else:
-        num_actions = env_utils.get_num_actions(env_id)
-        model = TwoLayer(num_outputs=num_actions)
+    model = build_model(env_id)
 
     obs_shape = env.observation_space.shape
     assert obs_shape is not None
     rng = np.random.default_rng(seed)
     test_rng = np.random.default_rng(seed)
-    key = jax.random.PRNGKey(seed)
-    initial_params = get_initial_params(
-        input_dims=obs_shape,
-        key=key,
-        model=model,
-    )
-    state = create_train_state(
+    state = get_initial_state(
         decaying_lr_and_clip_param=decaying_lr_and_clip_param,
-        params=initial_params,
+        iterations_per_step=iterations_per_step,
         learning_rate=learning_rate,
+        loop_steps=loop_steps,
         model=model,
-        train_steps=loop_steps * num_epochs * iterations_per_step,
+        num_epochs=num_epochs,
+        obs_shape=obs_shape,
+        seed=seed,
     )
     if load_dir is not None:
         logging.info("Loading model from %s", load_dir)
-        del initial_params
         state = checkpoints.restore_checkpoint(load_dir, state)
 
     save_count = 0
@@ -492,3 +473,58 @@ def train(
             )
             save_count += 1
     return state
+
+
+def get_initial_state(
+    decaying_lr_and_clip_param,
+    learning_rate,
+    num_epochs,
+    seed,
+    loop_steps,
+    iterations_per_step,
+    model,
+    obs_shape,
+):
+    key = jax.random.PRNGKey(seed)
+    initial_params = get_initial_params(
+        input_dims=obs_shape,
+        key=key,
+        model=model,
+    )
+    state = create_train_state(
+        decaying_lr_and_clip_param=decaying_lr_and_clip_param,
+        params=initial_params,
+        learning_rate=learning_rate,
+        model=model,
+        train_steps=loop_steps * num_epochs * iterations_per_step,
+    )
+    del initial_params
+    return state
+
+
+def build_model(env_id):
+    if env_id == "empty":
+        num_actions = len(MiniGridEnv.Actions)
+        model = RGBConv(num_outputs=num_actions)
+    elif re.match(env_utils.MyEnv.pattern, env_id):
+        num_actions = env_utils.MyEnv.action_space.n
+        model = OneHotConv(num_outputs=num_actions)
+    elif "NoFrameskip" in env_id:
+        num_actions = env_utils.get_num_actions(env_id)
+        model = RGBConv(num_outputs=num_actions)
+    elif "MiniGrid" in env_id:
+        num_actions = env_utils.get_num_actions(env_id)
+        model = RGBConv(num_outputs=num_actions)
+    else:
+        num_actions = env_utils.get_num_actions(env_id)
+        model = TwoLayer(num_outputs=num_actions)
+    return model
+
+
+def compute_step_values(actor_steps, batch_size, num_agents, total_frames):
+    loop_steps = total_frames // (num_agents * actor_steps)
+    # train_step does multiple steps per call for better performance
+    # compute number of steps per call here to convert between the number of
+    # train steps and the inner number of optimizer steps
+    iterations_per_step = num_agents * actor_steps // batch_size
+    return loop_steps, iterations_per_step
