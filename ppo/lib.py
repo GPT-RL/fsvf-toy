@@ -16,6 +16,7 @@
 
 import functools
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
@@ -366,7 +367,7 @@ def train(
     if env_id == "empty":
         num_actions = len(MiniGridEnv.Actions)
         model = RGBConv(num_outputs=num_actions)
-    elif env_id == "my":
+    elif re.match(env_utils.MyEnv.pattern, env_id):
         num_actions = env_utils.MyEnv.action_space.n
         model = OneHotConv(num_outputs=num_actions)
     elif "NoFrameskip" in env_id:

@@ -16,10 +16,11 @@
 
 
 import operator
+import re
 from collections import deque
 from dataclasses import dataclass
 from functools import reduce
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import gym
 import numpy as np
@@ -256,6 +257,8 @@ class EmptyEnv(MiniGridEnv):
 class MyEnv(gym.Env):
     height: int
     width: int
+    deltas: ClassVar[np.ndarray] = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])
+    pattern: ClassVar[str] = r"my-env-(\d+)x(\d+)"
 
     def __post_init__(self):
         self.observation_space = Dict(
@@ -268,11 +271,7 @@ class MyEnv(gym.Env):
     @classmethod
     @property
     def action_space(cls):
-        return Discrete(1 + len(cls.deltas()))
-
-    @staticmethod
-    def deltas():
-        return np.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        return Discrete(1 + len(cls.deltas))
 
     def random_pos(self) -> np.ndarray:
         pos = self.np_random.randint(low=0, high=(self.width, self.height))
@@ -292,7 +291,7 @@ class MyEnv(gym.Env):
         r = 0.0
         t = False
         try:
-            delta = self.deltas()[action]
+            delta = self.deltas[action]
         except IndexError:
             r = float(all(self.agent == self.goal))
             t = True
@@ -378,9 +377,10 @@ def create_env(env_id: str, test: bool):
             ImgObsWrapper,
             RenderWrapper,
         )
-    elif env_id == "my":
+    elif re.match(MyEnv.pattern, env_id):
+        [(width, height)] = re.findall(MyEnv.pattern, env_id)
         return flow(
-            MyEnv(height=2, width=2),
+            MyEnv(height=int(height), width=int(width)),
             TwoDGridWrapper,
             OneHotWrapper,
             RenderWrapper,
