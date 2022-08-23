@@ -386,7 +386,7 @@ def create_env(env_id: str, test: bool):
             TwoDGridWrapper,
             OneHotWrapper,
             RenderWrapper,
-            partial(TimeLimit, max_episode_steps=1 + height + width),
+            partial(TimeLimit, max_episode_steps=10 + height + width),
         )
     elif "NoFrameskip" in env_id:
         return flow(
