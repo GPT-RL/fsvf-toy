@@ -81,12 +81,10 @@ class OneHotConv(nn.Module):
         """
         dtype = jnp.float32
         x = nn.Conv(
-            features=64, kernel_size=(3, 3), strides=(1, 1), name="conv", dtype=dtype
+            features=32, kernel_size=(3, 3), strides=(1, 1), name="conv", dtype=dtype
         )(x)
         x = nn.relu(x)
         x = x.reshape((x.shape[0], -1))  # flatten
-        x = nn.Dense(features=512, name="hidden", dtype=dtype)(x)
-        x = nn.relu(x)
         logits = nn.Dense(features=self.num_outputs, name="logits", dtype=dtype)(x)
         policy_log_probabilities = nn.log_softmax(logits)
         value = nn.Dense(features=1, name="value", dtype=dtype)(x)
