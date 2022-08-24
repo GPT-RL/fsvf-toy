@@ -18,8 +18,6 @@ This script trains a Transformer on the Universal dependency dataset.
 """
 
 import functools
-import os
-import time
 
 import input_pipeline
 import jax
@@ -31,7 +29,8 @@ import tensorflow as tf
 from absl import app, flags, logging
 from flax import jax_utils
 from flax import linen as nn
-from flax.metrics import tensorboard
+
+# from flax.metrics import tensorboard
 from flax.training import common_utils, train_state
 from jax import random
 
@@ -247,13 +246,13 @@ def main(argv):
     if batch_size % jax.device_count() > 0:
         raise ValueError("Batch size must be divisible by the number of devices")
 
-    if jax.process_index() == 0:
-        train_summary_writer = tensorboard.SummaryWriter(
-            os.path.join(FLAGS.model_dir, FLAGS.experiment + "_train")
-        )
-        eval_summary_writer = tensorboard.SummaryWriter(
-            os.path.join(FLAGS.model_dir, FLAGS.experiment + "_eval")
-        )
+    # if jax.process_index() == 0:
+    # train_summary_writer = tensorboard.SummaryWriter(
+    # os.path.join(FLAGS.model_dir, FLAGS.experiment + "_train")
+    # )
+    # eval_summary_writer = tensorboard.SummaryWriter(
+    # os.path.join(FLAGS.model_dir, FLAGS.experiment + "_eval")
+    # )
 
     # create the training and development dataset
     vocabs = input_pipeline.create_vocabs(FLAGS.train)
@@ -330,7 +329,7 @@ def main(argv):
     # the main pmap'd training update for performance.
     dropout_rngs = random.split(rng, jax.local_device_count())
     metrics_all = []
-    tick = time.time()
+    # tick = time.time()
     best_dev_score = 0
     for step, batch in zip(range(num_train_steps), train_iter):
         batch = common_utils.shard(
@@ -349,14 +348,14 @@ def main(argv):
             )  # pylint: disable=cell-var-from-loop
             summary["learning_rate"] = lr
             logging.info("train in step: %d, loss: %.4f", step, summary["loss"])
-            if jax.process_index() == 0:
-                tock = time.time()
-                steps_per_sec = eval_freq / (tock - tick)
-                tick = tock
-                train_summary_writer.scalar("steps per second", steps_per_sec, step)
-                for key, val in summary.items():
-                    train_summary_writer.scalar(key, val, step)
-                train_summary_writer.flush()
+            # if jax.process_index() == 0:
+            #     tock = time.time()
+            #     steps_per_sec = eval_freq / (tock - tick)
+            #     tick = tock
+            # train_summary_writer.scalar("steps per second", steps_per_sec, step)
+            # for key, val in summary.items():
+            # train_summary_writer.scalar(key, val, step)
+            # train_summary_writer.flush()
 
             metrics_all = []  # reset metric accumulation for next evaluation cycle.
 
@@ -399,10 +398,10 @@ def main(argv):
                 # TODO: save model.
             eval_summary["best_dev_score"] = best_dev_score
             logging.info("best development model score %.4f", best_dev_score)
-            if jax.process_index() == 0:
-                for key, val in eval_summary.items():
-                    eval_summary_writer.scalar(key, val, step)
-                eval_summary_writer.flush()
+            # if jax.process_index() == 0:
+            # for key, val in eval_summary.items():
+            # eval_summary_writer.scalar(key, val, step)
+            # eval_summary_writer.flush()
 
 
 if __name__ == "__main__":
