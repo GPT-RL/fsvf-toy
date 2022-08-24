@@ -16,6 +16,7 @@
 #
 import os
 from pprint import pprint
+from typing import Optional
 
 import dataset  # noqa: F401
 import tensorflow_datasets as tfds
@@ -25,21 +26,23 @@ from dollar_lambda import command
 @command()
 def run(
     context_size: int = 10,
+    data_dir: Optional[str] = os.getenv("DATA_DIR"),
+    download_dir: Optional[str] = os.getenv("EXPERIENCE_DIR"),
     gamma: float = 0.9,
     max_checkpoint: int = 50,
     test_size: int = 100,
 ):
     ds_name = "my_dataset"
-    tfds.builder(
+    builder = tfds.builder(
         ds_name,
         context_size=context_size,
+        data_dir=data_dir,
         gamma=gamma,
         max_checkpoint=max_checkpoint,
         test_size=test_size,
-    ).download_and_prepare(
-        download_config=tfds.download.DownloadConfig(),
-        download_dir=os.getenv("EXPERIENCE_DIR"),
     )
+
+    builder.download_and_prepare(download_dir=download_dir)
     df = tfds.load(
         ds_name,
         builder_kwargs=dict(
@@ -48,6 +51,7 @@ def run(
             max_checkpoint=max_checkpoint,
             test_size=test_size,
         ),
+        download_and_prepare_kwargs=dict(download_dir=download_dir),
     )
 
     for example in df["train"].take(1):

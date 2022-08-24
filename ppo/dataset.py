@@ -41,20 +41,19 @@ class MyDataset(GeneratorBasedBuilder):
 
     def __init__(
         self,
+        *args,
         context_size: int,
         gamma: float,
         max_checkpoint: int,
         test_size: int,
-        config=None,
-        data_dir=None,
+        **kwargs,
     ):
-        self.config = config
         self.context_size = context_size
         self.gamma = gamma
         self.max_checkpoint = max_checkpoint
         self.rng = np.random.default_rng(seed=0)
         self.test_size = test_size
-        super().__init__()
+        super().__init__(*args, **kwargs)
 
     def _info(self) -> DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
