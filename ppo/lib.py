@@ -440,7 +440,10 @@ def train(
                         clipped = clip(lambda s: s[:first_term_step])
                         assert clipped.done[-1]
                         unclipped = clip(lambda s: s[first_term_step:])
-                        with Path(experience_dir, f"{step}.{i}.npz").open("wb") as f:
+                        step_dir = Path(experience_dir, str(step))
+                        step_dir.mkdir(parents=True, exist_ok=True)
+
+                        with Path(step_dir, f"{i}.npz").open("wb") as f:
                             np.savez(f, **asdict(clipped))
                             console.log(f"Saved experience to {f.name}")
                             i += 1
