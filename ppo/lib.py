@@ -19,10 +19,10 @@ import itertools
 import logging
 import re
 import time
+from dataclasses import asdict, astuple
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
 
-import agent
 import env_utils
 import flax
 import jax
@@ -30,13 +30,14 @@ import jax.numpy as jnp
 import jax.random
 import numpy as np
 import optax
+from agent import ExpTuple, RemoteSimulator, policy_action
 from flax import linen as nn
 from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
 from jax.tree_util import tree_map
 from models import OneHotConv, RGBConv, TwoLayer
 from returns.curry import partial
-from returns.pipeline import flow, pipe
+from returns.pipeline import flow
 from rich.console import Console
 from run_logger import RunLogger
 
@@ -116,7 +117,7 @@ def loss_fn(
       loss: the PPO loss, scalar quantity
     """
     states, actions, old_log_probs, returns, advantages = minibatch
-    log_probs, values = agent.policy_action(apply_fn, params, states)
+    log_probs, values = policy_action(apply_fn, params, states)
     values = values[:, 0]  # Convert shapes: (batch, 1) to (batch, ).
     probs = jnp.exp(log_probs)
 
@@ -186,7 +187,7 @@ def train_step(
 
 def get_experience(
     rng: np.random.Generator,
-    simulators: List[agent.RemoteSimulator],
+    simulators: List[RemoteSimulator],
     state: train_state.TrainState,
 ):
     """Collect experience from agents.
@@ -200,9 +201,7 @@ def get_experience(
             sim_state = sim.conn.recv()
             sim_states.append(sim_state)
         sim_states = np.concatenate(sim_states, axis=0)
-        log_probs, values = agent.policy_action(
-            state.apply_fn, state.params, sim_states
-        )
+        log_probs, values = policy_action(state.apply_fn, state.params, sim_states)
         log_probs, values = jax.device_get((log_probs, values))
         probs = np.exp(np.array(log_probs))
         for i, sim in enumerate(simulators):
@@ -214,13 +213,13 @@ def get_experience(
             sim_state, action, reward, done = sim.conn.recv()
             value = values[i, 0]
             log_prob = log_probs[i][action]
-            sample = agent.ExpTuple(sim_state, action, reward, value, log_prob, done)
+            sample = ExpTuple(sim_state, action, reward, value, log_prob, done)
             experiences.append(sample)
         yield experiences
 
 
 def process_experience(
-    experience: List[List[agent.ExpTuple]],
+    experience: List[List[ExpTuple]],
     actor_steps: int,
     num_agents: int,
     gamma: float,
@@ -310,6 +309,8 @@ def train(
     entropy_coeff: float,
     # id to pass to gym.make
     env_id: str,
+    # If not none, path to save experience from test rollouts.
+    experience_dir: Optional[str],
     # RL discount parameter.
     gamma: float,
     # Generalized Advantage Estimation parameter.
@@ -317,7 +318,7 @@ def train(
     # The learning rate for the Adam optimizer.
     learning_rate: float,
     # If not none, parameters will be loaded from this path.
-    load_dir: Optional[Path],
+    load_dir: Optional[str],
     # number of updates between logs
     log_frequency: int,
     # logger for logging to Hasura
@@ -358,7 +359,7 @@ def train(
         num_agents = 1
 
     def get_simulators(n: int):
-        return [agent.RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(n)]
+        return [RemoteSimulator(env_id=env_id, seed=seed + i) for i in range(n)]
 
     simulators = get_simulators(num_agents)
     test_simulators = get_simulators(num_test_agents)
@@ -398,41 +399,33 @@ def train(
     for step in range(start_step, loop_steps):
         # Bookkeeping and testing.
         if step % log_frequency == 0:
-
-            def sum_exp(projection) -> Callable[[list[agent.ExpTuple]], int]:
-                return pipe(partial(map, projection), sum)
-
-            def acc_func(
-                acc: "list[agent.ExpTuple] | tuple[float, int]",
-                new: list[agent.ExpTuple],
+            experiences = []
+            returns = 0.0
+            episodes = 0
+            for exp in get_experience(
+                rng=test_rng, simulators=test_simulators, state=state
             ):
-                sum_done = sum_exp(lambda e: e.done)
-                sum_rewards = sum_exp(lambda e: e.reward)
-                if isinstance(acc, list):
-                    returns = 0.0
-                    episodes = sum_done(acc)
-                else:
-                    returns, episodes = acc
-                    assert isinstance(episodes, int)
-                returns += sum_rewards(new)
-                episodes += sum_done(new)
-                return returns, episodes
+                experiences += [exp]
+                returns += sum([e.reward for e in exp])
+                episodes += sum([e.done for e in exp])
+                if episodes >= num_test_episodes:
+                    break
 
-            def pred(
-                acc: "list[agent.ExpTuple] | tuple[float, int]",
-            ):
-                if isinstance(acc, list):
-                    return True
-                _, episodes = acc
-                assert isinstance(episodes, int)
-                return episodes < num_test_episodes
+            test_return = returns / episodes
 
-            *_, (total_return, episodes) = flow(
-                get_experience(rng=test_rng, simulators=test_simulators, state=state),
-                lambda exp: itertools.accumulate(exp, acc_func),
-                partial(itertools.takewhile, pred),
-            )
-            test_return = total_return / episodes
+            if experience_dir is not None:
+                for i, episode in flow(
+                    zip(*experiences), list, partial(tree_map, astuple), enumerate
+                ):
+                    exp_tuple = flow(
+                        zip(*episode),
+                        partial(map, np.stack),
+                        lambda s: ExpTuple(*s),
+                        asdict,
+                    )
+                    with Path(experience_dir, f"{step}_{i}.npz").open("wb") as f:
+                        np.savez(f, **exp_tuple)
+                        console.log(f"Saved experience to {f.name}")
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,
