@@ -235,6 +235,17 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+name = "dill"
+version = "0.3.5.1"
+description = "serialize all of python"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*"
+
+[package.extras]
+graph = ["objgraph (>=1.7.2)"]
+
+[[package]]
 name = "distlib"
 version = "0.3.5"
 description = "Distribution utilities"
@@ -260,6 +271,35 @@ python-versions = ">=3.8,<4.0"
 
 [package.dependencies]
 pytypeclass = ">=0.1.1,<0.2.0"
+
+[[package]]
+name = "etils"
+version = "0.7.1"
+description = "Collection of common python utils"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+etils = {version = "*", extras = ["epy"], optional = true, markers = "extra == \"epath\""}
+importlib_resources = {version = "*", optional = true, markers = "extra == \"epath\""}
+typing_extensions = {version = "*", optional = true, markers = "extra == \"epath\""}
+zipp = {version = "*", optional = true, markers = "extra == \"epath\""}
+
+[package.extras]
+etree-tf = ["etils", "tf-nightly"]
+etree-jax = ["etils", "jax"]
+etree-dm = ["etils", "dm-tree"]
+etree = ["etils", "etils", "etils", "etils"]
+etqdm = ["etils", "tqdm", "absl-py"]
+epy = ["typing-extensions"]
+epath = ["etils", "zipp", "typing-extensions", "importlib-resources"]
+enp = ["etils", "numpy"]
+edc = ["etils"]
+ecolab = ["etils", "etils", "mediapy", "numpy", "jupyter"]
+dev = ["chex", "yapf", "pylint (>=2.6.0)", "pytest-xdist", "pytest-subtests", "pytest"]
+array-types = ["etils"]
+all = ["etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils"]
 
 [[package]]
 name = "executing"
@@ -325,25 +365,25 @@ testing = ["pandas", "torch", "tensorflow", "tensorflow-datasets", "tensorflow-t
 
 [[package]]
 name = "fonttools"
-version = "4.36.0"
+version = "4.37.0"
 description = "Tools to manipulate font files"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 
 [package.extras]
-woff = ["brotli (>=1.0.1)", "brotlicffi (>=0.8.0)", "zopfli (>=0.1.4)"]
-unicode = ["unicodedata2 (>=14.0.0)"]
-ufo = ["fs (>=2.2.0,<3)"]
-type1 = ["xattr"]
-symfont = ["sympy"]
-repacker = ["uharfbuzz (>=0.23.0)"]
-plot = ["matplotlib"]
-pathops = ["skia-pathops (>=0.5.0)"]
-lxml = ["lxml (>=4.0,<5)"]
-interpolatable = ["munkres", "scipy"]
+all = ["fs (>=2.2.0,<3)", "lxml (>=4.0,<5)", "zopfli (>=0.1.4)", "lz4 (>=1.7.4.2)", "matplotlib", "sympy", "skia-pathops (>=0.5.0)", "uharfbuzz (>=0.23.0)", "brotlicffi (>=0.8.0)", "scipy", "brotli (>=1.0.1)", "munkres", "unicodedata2 (>=14.0.0)", "xattr"]
 graphite = ["lz4 (>=1.7.4.2)"]
-all = ["xattr", "unicodedata2 (>=14.0.0)", "munkres", "brotli (>=1.0.1)", "scipy", "brotlicffi (>=0.8.0)", "uharfbuzz (>=0.23.0)", "skia-pathops (>=0.5.0)", "sympy", "matplotlib", "lz4 (>=1.7.4.2)", "zopfli (>=0.1.4)", "lxml (>=4.0,<5)", "fs (>=2.2.0,<3)"]
+interpolatable = ["scipy", "munkres"]
+lxml = ["lxml (>=4.0,<5)"]
+pathops = ["skia-pathops (>=0.5.0)"]
+plot = ["matplotlib"]
+repacker = ["uharfbuzz (>=0.23.0)"]
+symfont = ["sympy"]
+type1 = ["xattr"]
+ufo = ["fs (>=2.2.0,<3)"]
+unicode = ["unicodedata2 (>=14.0.0)"]
+woff = ["zopfli (>=0.1.4)", "brotlicffi (>=0.8.0)", "brotli (>=1.0.1)"]
 
 [[package]]
 name = "frozenlist"
@@ -428,6 +468,20 @@ python-versions = "*"
 
 [package.dependencies]
 six = "*"
+
+[[package]]
+name = "googleapis-common-protos"
+version = "1.56.4"
+description = "Common protobufs used in Google APIs"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+protobuf = ">=3.15.0,<5.0.0dev"
+
+[package.extras]
+grpc = ["grpcio (>=1.0.0,<2.0.0dev)"]
 
 [[package]]
 name = "gql"
@@ -1044,6 +1098,20 @@ toml = "*"
 virtualenv = ">=20.0.8"
 
 [[package]]
+name = "promise"
+version = "2.3"
+description = "Promises/A+ implementation for Python"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+six = "*"
+
+[package.extras]
+test = ["pytest (>=2.7.3)", "pytest-cov", "coveralls", "futures", "pytest-benchmark", "mock"]
+
+[[package]]
 name = "prompt-toolkit"
 version = "3.0.30"
 description = "Library for building powerful interactive command lines in Python"
@@ -1443,6 +1511,63 @@ numpy = "*"
 protobuf = ">=3.8.0,<=3.20.1"
 
 [[package]]
+name = "tensorflow-datasets"
+version = "4.6.0"
+description = "tensorflow/datasets is a library of datasets ready to use with TensorFlow."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+absl-py = "*"
+dill = "*"
+etils = {version = "*", extras = ["epath"]}
+importlib-resources = {version = "*", markers = "python_version < \"3.9\""}
+numpy = "*"
+promise = "*"
+protobuf = ">=3.12.2"
+requests = ">=2.19.0"
+six = "*"
+tensorflow-metadata = "*"
+termcolor = "*"
+toml = "*"
+tqdm = "*"
+
+[package.extras]
+aflw2k3d = ["scipy"]
+beir = ["apache-beam"]
+ble_wind_field = ["gcsfs", "zarr"]
+c4 = ["apache-beam", "gcld3", "langdetect", "nltk", "tldextract"]
+cats_vs_dogs = ["matplotlib"]
+colorectal_histology = ["pillow"]
+common_voice = ["pydub"]
+dev = ["jax", "jupyter", "pytest", "pytest-shard", "pytest-xdist", "pandas", "pydub", "apache-beam", "pyyaml", "pylint (>=2.6.0)", "yapf"]
+duke_ultrasound = ["scipy"]
+eurosat = ["scikit-image", "tifffile", "imagecodecs"]
+groove = ["pretty-midi", "pydub"]
+gtzan = ["pydub"]
+imagenet2012_corrupted = ["opencv-python", "scikit-image", "scipy"]
+librispeech = ["pydub"]
+lsun = ["tensorflow-io"]
+matplotlib = ["matplotlib"]
+nsynth = ["crepe (>=0.0.11)", "librosa", "scikit-learn (==0.20.3)"]
+ogbg_molpcba = ["pandas", "networkx"]
+pet_finder = ["pandas"]
+robonet = ["h5py"]
+robosuite_panda_pick_place_can = ["envlogger"]
+smartwatch_gestures = ["pandas"]
+svhn = ["scipy"]
+tensorflow = ["tensorflow (>=2.1)"]
+tensorflow-data-validation = ["tensorflow-data-validation"]
+tests-all = ["jax", "jupyter", "pytest", "pytest-shard", "pytest-xdist", "pandas", "pydub", "apache-beam", "pyyaml", "scipy", "gcsfs", "zarr", "gcld3", "langdetect", "nltk", "tldextract", "matplotlib", "pillow", "scikit-image", "tifffile", "imagecodecs", "pretty-midi", "opencv-python", "networkx", "h5py", "envlogger", "mwparserfromhell", "bs4", "lxml", "pycocotools"]
+the300w_lp = ["scipy"]
+wider_face = ["pillow"]
+wiki_dialog = ["apache-beam"]
+wikipedia = ["mwparserfromhell", "apache-beam"]
+wsc273 = ["bs4", "lxml"]
+youtube_vis = ["pycocotools"]
+
+[[package]]
 name = "tensorflow-estimator"
 version = "2.9.0"
 description = "TensorFlow Estimator."
@@ -1497,6 +1622,19 @@ tensorflow-aarch64 = ["tensorflow-aarch64 (>=2.9.0,<2.10.0)"]
 tensorflow = ["tensorflow (>=2.9.0,<2.10.0)"]
 
 [[package]]
+name = "tensorflow-metadata"
+version = "1.10.0"
+description = "Library and standards for schema and statistics."
+category = "main"
+optional = false
+python-versions = ">=3.7,<4"
+
+[package.dependencies]
+absl-py = ">=0.9,<2.0.0"
+googleapis-common-protos = ">=1.52.0,<2"
+protobuf = ">=3.13,<4"
+
+[[package]]
 name = "tensorstore"
 version = "0.1.22"
 description = "Read and write large, multi-dimensional arrays"
@@ -1519,7 +1657,7 @@ python-versions = "*"
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
@@ -1538,6 +1676,23 @@ description = "List processing tools and functional utilities"
 category = "main"
 optional = false
 python-versions = ">=3.5"
+
+[[package]]
+name = "tqdm"
+version = "4.64.0"
+description = "Fast, Extensible Progress Meter"
+category = "main"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
+
+[package.dependencies]
+colorama = {version = "*", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+dev = ["py-make (>=0.1.0)", "twine", "wheel"]
+notebook = ["ipywidgets (>=6)"]
+slack = ["slack-sdk"]
+telegram = ["requests"]
 
 [[package]]
 name = "traitlets"
@@ -1653,7 +1808,7 @@ docs = ["jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "jaraco.packaging (>=9)
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "675b7780feb272dcbc84af8dc2b3963a31000db8927fd625d757e183a9a54da7"
+content-hash = "34aacb786425cabd56613d00e3c78c1788e043d0c990cf9cb8f8fd3de572fbfc"
 
 [metadata.files]
 absl-py = [
@@ -1778,6 +1933,10 @@ decorator = [
     {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
     {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
 ]
+dill = [
+    {file = "dill-0.3.5.1-py2.py3-none-any.whl", hash = "sha256:33501d03270bbe410c72639b350e941882a8b0fd55357580fbc873fba0c59302"},
+    {file = "dill-0.3.5.1.tar.gz", hash = "sha256:d75e41f3eff1eee599d738e76ba8f4ad98ea229db8b085318aa2b3333a208c86"},
+]
 distlib = [
     {file = "distlib-0.3.5-py2.py3-none-any.whl", hash = "sha256:b710088c59f06338ca514800ad795a132da19fda270e3ce4affc74abf955a26c"},
     {file = "distlib-0.3.5.tar.gz", hash = "sha256:a7f75737c70be3b25e2bee06288cec4e4c221de18455b2dd037fe2a795cab2fe"},
@@ -1810,6 +1969,10 @@ dollar-lambda = [
     {file = "dollar-lambda-1.1.4.tar.gz", hash = "sha256:76ada5e21fae46bf2392be9f66edf7a71bc5cc7ce1d253f8a7bfa0666130a838"},
     {file = "dollar_lambda-1.1.4-py3-none-any.whl", hash = "sha256:a19ba905d160ddebd8e9edf63d28ee472bae520f5c720f7ae4906c718117c522"},
 ]
+etils = [
+    {file = "etils-0.7.1-py3-none-any.whl", hash = "sha256:9b5140835372e3db8b6e8d7da9e16beb2390ae6f24c253107c8127e4d2205189"},
+    {file = "etils-0.7.1.tar.gz", hash = "sha256:207c097dd4180d5e5ab1c7b7ee78b7bf9471e12534deace23b1d392debd292f3"},
+]
 executing = [
     {file = "executing-0.10.0-py2.py3-none-any.whl", hash = "sha256:9c745f80cda11eb22b62cbecf21156491a794eb56ab06f9d286a44e62822b24e"},
     {file = "executing-0.10.0.tar.gz", hash = "sha256:d1cd87c2e371e9966261410c5b3769d6df2f9e4a79a83eebd2662dd3388f9833"},
@@ -1831,8 +1994,8 @@ flax = [
     {file = "flax-0.5.2.tar.gz", hash = "sha256:5f07775fd4ba1926192ab6eb48c9adbd5658ddaf8585fb0c561741400d5599ff"},
 ]
 fonttools = [
-    {file = "fonttools-4.36.0-py3-none-any.whl", hash = "sha256:cb91ef8d5a435d90aeb3ab814b2548c6b515df5bc13b4c5adaa23778f2f79823"},
-    {file = "fonttools-4.36.0.zip", hash = "sha256:e637d2fe06bddabbfc488e02ef32d04d561e3c71e9ba11abc7782ea753ceb218"},
+    {file = "fonttools-4.37.0-py3-none-any.whl", hash = "sha256:e4467a36e24f918507b5cfdc61d2a479b6c7393a85d1f126f3c84f76e8df2151"},
+    {file = "fonttools-4.37.0.zip", hash = "sha256:2ee4509aeba40542a6c6d00895a0c66f3cb8b9edda2fa58438dd9f769e3ce76e"},
 ]
 frozenlist = [
     {file = "frozenlist-1.3.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:5f271c93f001748fc26ddea409241312a75e13466b06c94798d1a341cf0e6989"},
@@ -1919,6 +2082,10 @@ google-pasta = [
     {file = "google-pasta-0.2.0.tar.gz", hash = "sha256:c9f2c8dfc8f96d0d5808299920721be30c9eec37f2389f28904f454565c8a16e"},
     {file = "google_pasta-0.2.0-py2-none-any.whl", hash = "sha256:4612951da876b1a10fe3960d7226f0c7682cf901e16ac06e473b267a5afa8954"},
     {file = "google_pasta-0.2.0-py3-none-any.whl", hash = "sha256:b32482794a366b5366a32c92a9a9201b107821889935a02b3e51f6b432ea84ed"},
+]
+googleapis-common-protos = [
+    {file = "googleapis-common-protos-1.56.4.tar.gz", hash = "sha256:c25873c47279387cfdcbdafa36149887901d36202cb645a0e4f29686bf6e4417"},
+    {file = "googleapis_common_protos-1.56.4-py2.py3-none-any.whl", hash = "sha256:8eb2cbc91b69feaf23e32452a7ae60e791e09967d81d4fcc7fc388182d1bd394"},
 ]
 gql = [
     {file = "gql-3.4.0-py2.py3-none-any.whl", hash = "sha256:59c8a0b8f0a2f3b0b2ff970c94de86f82f65cb1da3340bfe57143e5f7ea82f71"},
@@ -2539,6 +2706,9 @@ pre-commit = [
     {file = "pre_commit-2.20.0-py2.py3-none-any.whl", hash = "sha256:51a5ba7c480ae8072ecdb6933df22d2f812dc897d5fe848778116129a681aac7"},
     {file = "pre_commit-2.20.0.tar.gz", hash = "sha256:a978dac7bc9ec0bcee55c18a277d553b0f419d259dadb4b9418ff2d00eb43959"},
 ]
+promise = [
+    {file = "promise-2.3.tar.gz", hash = "sha256:dfd18337c523ba4b6a58801c164c1904a9d4d1b1747c7d5dbf45b693a49d93d0"},
+]
 prompt-toolkit = [
     {file = "prompt_toolkit-3.0.30-py3-none-any.whl", hash = "sha256:d8916d3f62a7b67ab353a952ce4ced6a1d2587dfe9ef8ebc30dd7c386751f289"},
     {file = "prompt_toolkit-3.0.30.tar.gz", hash = "sha256:859b283c50bde45f5f97829f77a4674d1c1fcd88539364f1b28a37805cfd89c0"},
@@ -2799,6 +2969,10 @@ tensorboardx = [
     {file = "tensorboardX-2.5.1-py2.py3-none-any.whl", hash = "sha256:8808133ccca673cd04076f6f2a85cf2d39bb2d0393a0f20d0f9cbb06d472b57e"},
     {file = "tensorboardX-2.5.1.tar.gz", hash = "sha256:ea85a3446f22ce8a917fe4fa4d8a7a96222ef84ac835267d038c34bb99f6d61b"},
 ]
+tensorflow-datasets = [
+    {file = "tensorflow-datasets-4.6.0.tar.gz", hash = "sha256:9da2a65297e981f61c5f1cb45696066b9c4013d97803a6df74382bc24e2137cb"},
+    {file = "tensorflow_datasets-4.6.0-py3-none-any.whl", hash = "sha256:fc1f163668d449cb2280dedc458c25875aa92b665889a394dbd3dcff45978bfa"},
+]
 tensorflow-estimator = [
     {file = "tensorflow_estimator-2.9.0-py2.py3-none-any.whl", hash = "sha256:e9762bb302f51bc1eb2f35d19f0190a6a2d809d754d5def788c4328fe3746744"},
 ]
@@ -2829,6 +3003,9 @@ tensorflow-io-gcs-filesystem = [
     {file = "tensorflow_io_gcs_filesystem-0.26.0-cp39-cp39-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:c71438e6459f52462b95f98ab17b20cd1a269a1efe837e4df426a0b79359f3b7"},
     {file = "tensorflow_io_gcs_filesystem-0.26.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:bd285595afe03740553710ccdbd1397d69a8e48d758c731c0de1f1c5a71a9fe5"},
     {file = "tensorflow_io_gcs_filesystem-0.26.0-cp39-cp39-win_amd64.whl", hash = "sha256:2940b4ab6848ef5ec34dc3c140b5ae9eba0da13453da839c30ebe3461a6eb51d"},
+]
+tensorflow-metadata = [
+    {file = "tensorflow_metadata-1.10.0-py3-none-any.whl", hash = "sha256:e3ff528496105c0d73b2a402877525b1695635378fbe5c1b47ac7b3780816bb3"},
 ]
 tensorstore = [
     {file = "tensorstore-0.1.22-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:4fe51095fffa989a6537dc538e906a8753d6a5faeb38a1f0f22b43fd7c91e5b3"},
@@ -2862,6 +3039,10 @@ tomli = [
 toolz = [
     {file = "toolz-0.12.0-py3-none-any.whl", hash = "sha256:2059bd4148deb1884bb0eb770a3cde70e7f954cfbbdc2285f1f2de01fd21eb6f"},
     {file = "toolz-0.12.0.tar.gz", hash = "sha256:88c570861c440ee3f2f6037c4654613228ff40c93a6c25e0eba70d17282c6194"},
+]
+tqdm = [
+    {file = "tqdm-4.64.0-py2.py3-none-any.whl", hash = "sha256:74a2cdefe14d11442cedf3ba4e21a3b84ff9a2dbdc6cfae2c34addb2a14a5ea6"},
+    {file = "tqdm-4.64.0.tar.gz", hash = "sha256:40be55d30e200777a307a7585aee69e4eabb46b4ec6a4b4a5f2d9f11e7d5408d"},
 ]
 traitlets = [
     {file = "traitlets-5.3.0-py3-none-any.whl", hash = "sha256:65fa18961659635933100db8ca120ef6220555286949774b9cfc106f941d1c7a"},
