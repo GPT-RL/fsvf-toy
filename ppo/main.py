@@ -143,9 +143,10 @@ def _log(
             run_id=logger.run_id,
             name=name,
         )
-    )  # todo: encapsulate in HasuraLogger
+    )
+
     (no_sweep if sweep_id is None else train)(
-        **kwargs, load_dir=None, logger=logger, render=False
+        **update_kwargs(**kwargs), load_dir=None, logger=logger, render=False
     )
 
 

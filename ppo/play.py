@@ -128,7 +128,7 @@ def main(run_id: int, load_dir: Optional[Path] = None):
     logger = RunLogger(GRAPHQL_ENDPOINT)
     params = get_load_params(run_id, logger)
     if load_dir is None:
-        load_dir_str = os.getenv("LOAD_DIR")
+        load_dir_str = os.getenv("SAVE_DIR")
         assert load_dir_str is not None
         load_dir = Path(load_dir_str)
     load_dir = Path(load_dir, str(run_id))

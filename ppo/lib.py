@@ -17,6 +17,7 @@
 import functools
 import itertools
 import logging
+import os
 import re
 import time
 from dataclasses import asdict, astuple
@@ -413,6 +414,7 @@ def train(
 
             test_return = returns / episodes
 
+            experience_dir = experience_dir or os.getenv("EXPERIENCE_DIR")
             if experience_dir is not None:
                 i = 0
                 for episode in flow(
@@ -480,8 +482,10 @@ def train(
                 entropy_coeff=entropy_coeff,
             )
         if save_frequency and ((step + 1) % save_frequency == 0):
+            _save_dir = save_dir or os.getenv("SAVE_DIR")
+            assert _save_dir is not None
             checkpoints.save_checkpoint(
-                Path(save_dir, str(logger.run_id)),
+                Path(_save_dir, str(logger.run_id)),
                 target=state,
                 step=step + 1,
                 overwrite=True,
