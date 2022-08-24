@@ -414,18 +414,34 @@ def train(
             test_return = returns / episodes
 
             if experience_dir is not None:
-                for i, episode in flow(
-                    zip(*experiences), list, partial(tree_map, astuple), enumerate
+                i = 0
+                for episode in flow(
+                    zip(*experiences), list, partial(tree_map, astuple)
                 ):
-                    exp_tuple = flow(
+                    unclipped = flow(
                         zip(*episode),
                         partial(map, np.stack),
                         lambda s: ExpTuple(*s),
-                        asdict,
                     )
-                    with Path(experience_dir, f"{step}_{i}.npz").open("wb") as f:
-                        np.savez(f, **exp_tuple)
-                        console.log(f"Saved experience to {f.name}")
+                    while unclipped.done.any():
+                        [[first_term_step, *_]] = unclipped.done.nonzero()
+                        first_term_step += 1
+
+                        def clip(cut_fn):
+                            return flow(
+                                unclipped,
+                                astuple,
+                                partial(map, cut_fn),
+                                lambda s: ExpTuple(*s),
+                            )
+
+                        clipped = clip(lambda s: s[:first_term_step])
+                        assert clipped.done[-1]
+                        unclipped = clip(lambda s: s[first_term_step:])
+                        with Path(experience_dir, f"{step}.{i}.npz").open("wb") as f:
+                            np.savez(f, **asdict(clipped))
+                            console.log(f"Saved experience to {f.name}")
+                            i += 1
             frames = step * num_agents * actor_steps
             log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
                 "return": test_return,
