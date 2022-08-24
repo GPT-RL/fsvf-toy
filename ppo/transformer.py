@@ -17,21 +17,38 @@
 import os
 from pprint import pprint
 
-import dataset  # flake8: noqa
+import dataset  # noqa: F401
 import tensorflow_datasets as tfds
 from dollar_lambda import command
 
 
 @command()
-def run(max_checkpoint: int = 50, test_size: int = 100):
+def run(
+    context_size: int = 10,
+    gamma: float = 0.9,
+    max_checkpoint: int = 50,
+    test_size: int = 100,
+):
     ds_name = "my_dataset"
     tfds.builder(
-        ds_name, max_checkpoint=max_checkpoint, test_size=test_size
+        ds_name,
+        context_size=context_size,
+        gamma=gamma,
+        max_checkpoint=max_checkpoint,
+        test_size=test_size,
     ).download_and_prepare(
         download_config=tfds.download.DownloadConfig(),
         download_dir=os.getenv("EXPERIENCE_DIR"),
     )
-    df = tfds.load(ds_name)
+    df = tfds.load(
+        ds_name,
+        builder_kwargs=dict(
+            context_size=context_size,
+            gamma=gamma,
+            max_checkpoint=max_checkpoint,
+            test_size=test_size,
+        ),
+    )
 
     for example in df["train"].take(1):
         print("\n\nFirst data point;")
