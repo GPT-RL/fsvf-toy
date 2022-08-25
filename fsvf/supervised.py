@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import os
 from pprint import pprint
 from typing import Optional
 
@@ -25,9 +24,9 @@ from dollar_lambda import command
 
 @command()
 def run(
+    data_dir: Optional[str],
+    download_dir: Optional[str],
     context_size: int = 10,
-    data_dir: Optional[str] = os.getenv("DATA_DIR"),
-    download_dir: Optional[str] = os.getenv("EXPERIENCE_DIR"),
     gamma: float = 0.9,
     max_checkpoint: int = 50,
     test_size: int = 100,

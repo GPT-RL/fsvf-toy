@@ -79,10 +79,11 @@ class MyDataset(GeneratorBasedBuilder):
         def get_checkpoint_idxs():
             for path in dl_manager.download_dir.glob("*/*.npz"):
                 checkpoint_idx = int(path.parent.stem)
-                if checkpoint_idx > self.max_checkpoint:
+                if checkpoint_idx <= self.max_checkpoint:
                     yield checkpoint_idx
 
         checkpoint_idxs = set(get_checkpoint_idxs())
+        assert checkpoint_idxs
         test_idxs = flow(
             checkpoint_idxs,
             list,

@@ -26,20 +26,20 @@ from flax import struct
 class TransformerConfig:
     """Global hyperparameters used to minimize obnoxious kwarg plumbing."""
 
-    vocab_size: int
     output_vocab_size: int
+    vocab_size: int
+    attention_dropout_rate: float = 0.3
+    bias_init: Callable = nn.initializers.normal(stddev=1e-6)
+    dropout_rate: float = 0.3
     dtype: Any = jnp.float32
     emb_dim: int = 512
+    kernel_init: Callable = nn.initializers.xavier_uniform()
+    max_len: int = 2048
+    mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
-    qkv_dim: int = 512
-    mlp_dim: int = 2048
-    max_len: int = 2048
-    dropout_rate: float = 0.3
-    attention_dropout_rate: float = 0.3
-    kernel_init: Callable = nn.initializers.xavier_uniform()
-    bias_init: Callable = nn.initializers.normal(stddev=1e-6)
     posemb_init: Optional[Callable] = None
+    qkv_dim: int = 512
 
 
 def sinusoidal_init(max_len=2048):

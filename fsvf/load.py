@@ -16,12 +16,12 @@
 
 import itertools
 import logging
-import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import flax
 import numpy as np
+import yaml
 from dollar_lambda import argument, command
 from flax.training import checkpoints
 from ppo import agent, env_utils
@@ -131,7 +131,8 @@ def main(run_id: int, load_dir: Optional[Path] = None):
     logger = RunLogger(GRAPHQL_ENDPOINT)
     params = get_load_params(run_id, logger)
     if load_dir is None:
-        load_dir_str = os.getenv("SAVE_DIR")
+        with Path("ppo/config.yml").open() as f:
+            load_dir_str = yaml.load(f, Loader=yaml.FullLoader)["save_dir"]
         assert load_dir_str is not None
         load_dir = Path(load_dir_str)
     load_dir = Path(load_dir, str(run_id))

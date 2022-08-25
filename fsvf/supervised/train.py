@@ -4,6 +4,7 @@ import time
 import jax
 import jax.numpy as jnp
 import optax
+import supervised.dataset  # noqa: F401
 import tensorflow as tf
 from flax import jax_utils
 from flax.training import common_utils, train_state
@@ -21,13 +22,18 @@ from supervised.lib import (
 
 def train(
     batch_size: int,
+    context_size: int,
+    data_dir: str,
     dev: str,
+    download_dir: str,
+    gamma: float,
     learning_rate: float,
     logger: RunLogger,
-    max_length: int,
+    max_dataset_step: int,
     num_train_steps: int,
     eval_frequency: int,
     seed: int,
+    test_size: int,
     train: str,
 ):
     # Make sure tf does not allocate gpu memory.
@@ -41,10 +47,27 @@ def train(
     config = models.TransformerConfig(
         vocab_size=len(vocabs["forms"]),
         output_vocab_size=len(vocabs["xpos"]),
-        max_len=max_length,
+        max_len=context_size // 2,
     )
     attributes_input = [input_pipeline.CoNLLAttributes.FORM]
     attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
+    # ds_name = "my_dataset"
+    # builder_kwargs = dict(
+    #     context_size=config.max_len,
+    #     gamma=gamma,
+    #     max_checkpoint=max_dataset_step,
+    #     test_size=test_size,
+    # )
+    # download_and_prepare_kwargs = dict(download_dir=download_dir)
+    # tfds.builder(ds_name, data_dir=data_dir, **builder_kwargs).download_and_prepare(
+    #     **download_and_prepare_kwargs
+    # )
+    # ds = tfds.load(
+    #     ds_name,
+    #     builder_kwargs=builder_kwargs,
+    #     download_and_prepare_kwargs=download_and_prepare_kwargs,
+    # )
+    # train_iter = iter(ds["train"])
     train_ds = input_pipeline.sentence_dataset_dict(
         train,
         vocabs,
@@ -71,7 +94,7 @@ def train(
     # call a jitted initialization function to get the initial parameter tree
     @jax.jit
     def initialize_variables(init_rng):
-        init_batch = jnp.ones((config.max_len, 1), jnp.float32)
+        init_batch = jnp.ones((config.max_len, 1), jnp.float32)  # TODO
         init_variables = model.init(init_rng, inputs=init_batch, train=False)
         return init_variables
 
@@ -141,6 +164,7 @@ def train(
 
             eval_metrics = []
             eval_iter = iter(eval_ds)
+            # eval_iter = iter(ds["test"])
 
             for eval_batch in eval_iter:
                 eval_batch = jax.tree_util.tree_map(

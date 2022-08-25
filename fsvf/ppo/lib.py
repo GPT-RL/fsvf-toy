@@ -307,12 +307,12 @@ def train(
     # Linearly decay learning rate and clipping parameter to zero during
     # the training.
     decaying_lr_and_clip_param: bool,
+    # If not none, path to save experience from test rollouts.
+    download_dir: Optional[str],
     # Weight of entropy bonus in the total loss.
     entropy_coeff: float,
     # id to pass to gym.make
     env_id: str,
-    # If not none, path to save experience from test rollouts.
-    experience_dir: Optional[str],
     # RL discount parameter.
     gamma: float,
     # Generalized Advantage Estimation parameter.
@@ -411,8 +411,7 @@ def train(
 
             test_return = returns / episodes
 
-            experience_dir = experience_dir or os.getenv("EXPERIENCE_DIR")
-            if experience_dir is not None:
+            if download_dir is not None:
                 i = 0
                 for episode in flow(
                     zip(*experiences), list, partial(tree_map, astuple)
@@ -437,7 +436,7 @@ def train(
                         clipped = clip(lambda s: s[:first_term_step])
                         assert clipped.done[-1]
                         unclipped = clip(lambda s: s[first_term_step:])
-                        step_dir = Path(experience_dir, str(step))
+                        step_dir = Path(download_dir) / str(step)
                         step_dir.mkdir(parents=True, exist_ok=True)
 
                         with Path(step_dir, f"{i}.npz").open("wb") as f:
@@ -482,10 +481,8 @@ def train(
                 entropy_coeff=entropy_coeff,
             )
         if save_frequency and ((step + 1) % save_frequency == 0):
-            _save_dir = save_dir or os.getenv("SAVE_DIR")
-            assert _save_dir is not None
             checkpoints.save_checkpoint(
-                Path(_save_dir, str(logger.run_id)),
+                Path(save_dir) / str(logger.run_id),
                 target=state,
                 step=step + 1,
                 overwrite=True,
