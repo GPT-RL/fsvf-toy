@@ -107,7 +107,13 @@ class MyDataset(GeneratorBasedBuilder):
         def generate_episode():
             # TODO: optimize this loop
             for npzpath in path.glob("*.npz"):
-                episode = flow(npzpath, np.load, dict, lambda ep: ExpTuple(**ep))
+                episode = flow(
+                    npzpath,
+                    np.load,
+                    dict,
+                    lambda ep: ExpTuple(**ep),
+                    lambda exp: replace(exp, state=exp.state.squeeze(1)),
+                )
                 n = episode.reward.size
                 yield flow(
                     np.mgrid[:n, :n],
@@ -140,11 +146,10 @@ class MyDataset(GeneratorBasedBuilder):
                 )
 
         ds = reduce(lambda acc, new: acc.concatenate(new), generate_episode())
-        for ts in tfds.as_numpy(
-            ds.shuffle(len(ds)).batch(1 + self.context_size, drop_remainder=True)
-        ):
+        ds = ds.shuffle(len(ds)).batch(1 + self.context_size, drop_remainder=True)
+        ds = tfds.as_numpy(ds)
+        for ts in ds:  # type: ignore
             dp = DataPoint(**ts)
             join = np.str.join  # type: ignore
             key = f"{path.stem}_{join('_', dp.time_step.astype(str))}"
-
             yield key, ts
