@@ -151,31 +151,26 @@ def compute_metrics(logits, labels, weights):
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
-    targets = batch["value"]
-
-    weights = jnp.where(targets > 0, 1, 0).astype(jnp.float32)
-
+    targets = batch["value"][:, -1]
     dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
     def loss_fn(params):
-        breakpoint()
         """loss function used for training."""
-        logits = model.apply(
+        output = model.apply(
             {"params": params}, inputs=batch, train=True, rngs={"dropout": dropout_rng}
         )
-        loss, weight_sum = compute_weighted_cross_entropy(logits, targets, weights)
-
-        mean_loss = loss / weight_sum
-        return mean_loss, logits
+        estimate = output[:, -1, 0]
+        return jnp.mean(jnp.square(estimate - targets))
 
     lr = learning_rate_fn(state.step)
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (_, logits), grads = grad_fn(state.params)
-    grads = jax.lax.pmean(grads, "batch")
+    grad_fn = jax.value_and_grad(loss_fn)
+    loss, grads = grad_fn(state.params)
+    grads = jax.mean(grads, 0)
     new_state = state.apply_gradients(grads=grads)
-    metrics = compute_metrics(logits, targets, weights)
-    metrics["learning_rate"] = lr
-
+    metrics = {
+        "loss": loss,
+        "learning rate": lr,
+    }
     return new_state, metrics
 
 

@@ -50,7 +50,7 @@ def no_sweep(**kwargs):
 
 
 @tree.command()
-def no_log(config_path: Path = CONFIG_PATH):
+def no_log(config_path: Path = CONFIG_PATH, disable_jit: bool = False):
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
     with DEFAULTS_PATH.open() as f:
@@ -58,12 +58,15 @@ def no_log(config_path: Path = CONFIG_PATH):
     with config_path.open() as f:
         without_defaults = yaml.load(f, Loader=yaml.FullLoader)
     with_defaults.update(without_defaults)
-    return no_sweep(logger=logger, **with_defaults)
+    return no_sweep(disable_jit=disable_jit, logger=logger, **with_defaults)
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
 def log(allow_dirty: bool = False, config_path: Path = CONFIG_PATH, **kwargs):
     repo = Repo(".")
+    with config_path.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    kwargs.update(config)
     return _log(**kwargs, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
 
 
@@ -112,7 +115,9 @@ def _log(
     with DEFAULTS_PATH.open() as f:
         with_defaults = yaml.load(f, Loader=yaml.FullLoader)
     with_defaults.update(parameters)
-    (no_sweep if sweep_id is None else train)(**with_defaults, logger=logger)
+    (no_sweep if sweep_id is None else train)(
+        **with_defaults, disable_jit=False, logger=logger
+    )
 
 
 def trainable(config: dict):

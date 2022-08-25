@@ -10,7 +10,6 @@ import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
-from jax.config import config
 from returns.pipeline import flow
 from rich.console import Console
 from run_logger import RunLogger
@@ -23,14 +22,12 @@ from supervised.lib import (
 )
 from tensorflow.python.ops.numpy_ops import np_config
 
-config.update("jax_disable_jit", True)
-
 
 def train(
     batch_size: int,
     steps_per_prompt: int,
     data_dir: str,
-    dev: str,
+    disable_jit: bool,
     download_dir: str,
     dropout_rate: float,
     gamma: float,
@@ -42,26 +39,28 @@ def train(
     eval_frequency: int,
     seed: int,
     test_size: int,
-    train: str,
 ):
+    if disable_jit:
+        from jax._src.config import config
+
+        config.update("jax_disable_jit", True)
+
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
     np_config.enable_numpy_behavior()
     console = Console()
 
     console.log("Loading data...")
-    ds_name = "my_dataset"
     builder_kwargs = dict(
         context_size=steps_per_prompt,
         gamma=gamma,
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
-    kwargs = dict(name=ds_name, data_dir=data_dir)
+    kwargs = dict(name="my_dataset", data_dir=data_dir)
     download_and_prepare_kwargs = dict(download_dir=download_dir)
-    tfds.builder(**kwargs, **builder_kwargs).download_and_prepare(
-        **download_and_prepare_kwargs
-    )
+    builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
+    builder.download_and_prepare(**download_and_prepare_kwargs)
     ds = tfds.load(
         **kwargs,
         builder_kwargs=builder_kwargs,
@@ -73,8 +72,8 @@ def train(
     console.log("Creating model...")
     # create the training and development dataset
     config = models.TransformerConfig()
-    train_iter = ds["train"].batch(batch_size)
-    train_iter = tfds.as_numpy(train_iter)
+    train_iter = ds["train"]  # type: ignore
+    train_iter = tfds.as_numpy(train_iter.batch(batch_size))
     init_batch = flow(train_iter, iter, next)
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
@@ -105,12 +104,11 @@ def train(
     # Replicate optimizer.
     state = jax_utils.replicate(state)
 
-    p_train_step = jax.vmap(  # TODO: pmap
+    p_train_step = jax.pmap(
         functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         in_axes=0,
-        # axis_name="batch",
-        # donate_argnums=(0,),
-    )  # pytype: disable=wrong-arg-types
+        donate_argnums=(0,),
+    )
 
     def eval_step(params, batch):
         """Calculate evaluation metrics on a batch."""
@@ -128,24 +126,17 @@ def train(
     tick = time.time()
     best_dev_score = 0
     console.log("Training...")
-    for step, batch in zip(range(num_train_steps), train_iter):
-        batch = common_utils.shard(
-            batch
-            # jax.tree_util.tree_map(lambda x: x.(), batch)
-        )
-        breakpoint()
-
+    for step, batch in zip(range(num_train_steps), train_iter):  # type: ignore
+        batch = common_utils.shard(batch)
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         metrics_all.append(metrics)
         if (step + 1) % eval_frequency == 0:
             metrics_all = common_utils.get_metrics(metrics_all)
-            lr = metrics_all.pop("learning_rate").mean()
+            lr = metrics_all.pop("learning rate").mean()
             metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics_all)
             denominator = metrics_sums.pop("denominator")
-            summary = jax.tree_util.tree_map(
-                lambda x: x / denominator, metrics_sums
-            )  # pylint: disable=cell-var-from-loop
-            summary["learning_rate"] = lr
+            summary = jax.tree_util.tree_map(lambda x: x / denominator, metrics_sums)
+            summary["learning rate"] = lr
             if jax.process_index() == 0:
                 steps_per_sec = eval_frequency / (time.time() - tick)
                 log = {
@@ -161,7 +152,9 @@ def train(
 
             eval_metrics = []
             # eval_iter = iter(eval_ds)
-            eval_iter = ds["eval"].batch(batch_size)
+
+            ds_eval = ds["eval"]  # type: ignore
+            eval_iter = ds_eval.batch(batch_size)
 
             for eval_batch in eval_iter:
                 eval_batch = jax.tree_util.tree_map(
