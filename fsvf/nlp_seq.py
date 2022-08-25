@@ -1,229 +1,166 @@
-import functools
+import os
+import socket
+import sys
+import time
+from pathlib import Path
+from shlex import quote
+from typing import Any, Mapping, Optional
 
-import jax
-import jax.numpy as jnp
-import optax
-import tensorflow as tf
-from absl import app, flags, logging
-from flax import jax_utils
-from flax.training import common_utils, train_state
-from jax import random
-from supervised import input_pipeline, models
-from supervised.train import (
-    compute_metrics,
-    create_learning_rate_scheduler,
-    pad_examples,
-    train_step,
-)
+import line
+import ray
+import yaml
+from dollar_lambda import CommandTree, argument, flag, nonpositional
+from git.repo import Repo
+from ray import tune
+from rich.console import Console
+from run_logger import RunLogger, create_sweep
+from supervised.train import train
 
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string("model_dir", default="", help=("Directory for model data."))
-
-flags.DEFINE_string("experiment", default="xpos", help=("Experiment name."))
-
-flags.DEFINE_integer("batch_size", default=64, help=("Batch size for training."))
-
-flags.DEFINE_integer(
-    "eval_frequency",
-    default=100,
-    help=("Frequency of eval during training, e.g. every 1000 steps."),
-)
-
-flags.DEFINE_integer("num_train_steps", default=75000, help=("Number of train steps."))
-
-flags.DEFINE_float("learning_rate", default=0.05, help=("Learning rate."))
-
-flags.DEFINE_float(
-    "weight_decay", default=1e-1, help=("Decay factor for AdamW style weight decay.")
-)
-
-flags.DEFINE_integer("max_length", default=256, help=("Maximum length of examples."))
-
-flags.DEFINE_integer("random_seed", default=0, help=("Integer for PRNG random seed."))
-
-flags.DEFINE_string("train", default="", help=("Path to training data."))
-
-flags.DEFINE_string("dev", default="", help=("Path to development data."))
+console = Console()
+tree = CommandTree()
+CONFIG_PATH = Path("fsvf/supervised/config.yml")
+DEFAULTS_PATH = Path("fsvf/supervised/default.yml")
+ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
+GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 
 
-def main(argv):
-    if len(argv) > 1:
-        raise app.UsageError("Too many command-line arguments.")
+def param_generator(params: Any):
+    if isinstance(params, Mapping):
+        if tuple(params.keys()) == ("",):
+            yield from param_generator(params[""])
+            return
+        if not params:
+            yield {}
+        else:
+            (key, value), *params = params.items()
+            for choice in param_generator(value):
+                for other_choices in param_generator(dict(params)):
+                    yield {key: choice, **other_choices}
+    elif isinstance(params, (list, tuple)):
+        for choices in params:
+            yield from param_generator(choices)
+    else:
+        yield params
 
-    # Make sure tf does not allocate gpu memory.
-    tf.config.experimental.set_visible_devices([], "GPU")
 
-    batch_size = FLAGS.batch_size
-    learning_rate = FLAGS.learning_rate
-    num_train_steps = FLAGS.num_train_steps
-    eval_freq = FLAGS.eval_frequency
-    random_seed = FLAGS.random_seed
+def load_config(config_path: Path = CONFIG_PATH) -> dict[str, Any]:
+    with DEFAULTS_PATH.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    if config_path.exists():
+        with config_path.open() as f:
+            config.update(yaml.load(f, Loader=yaml.FullLoader))
+    else:
+        console.log(f"No config file found at {config_path}")
+    return config
 
-    if not FLAGS.dev:
-        raise app.UsageError("Please provide path to dev set.")
-    if not FLAGS.train:
-        raise app.UsageError("Please provide path to training set.")
-    if batch_size % jax.device_count() > 0:
-        raise ValueError("Batch size must be divisible by the number of devices")
 
-    # if jax.process_index() == 0:
-    # train_summary_writer = tensorboard.SummaryWriter(
-    # os.path.join(FLAGS.model_dir, FLAGS.experiment + "_train")
-    # )
-    # eval_summary_writer = tensorboard.SummaryWriter(
-    # os.path.join(FLAGS.model_dir, FLAGS.experiment + "_eval")
-    # )
+def no_sweep(**kwargs):
+    for params in param_generator(kwargs):
+        train(**params)
+        console.log("Done!")
 
-    # create the training and development dataset
-    vocabs = input_pipeline.create_vocabs(FLAGS.train)
-    config = models.TransformerConfig(
-        vocab_size=len(vocabs["forms"]),
-        output_vocab_size=len(vocabs["xpos"]),
-        max_len=FLAGS.max_length,
-    )
 
-    attributes_input = [input_pipeline.CoNLLAttributes.FORM]
-    attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
-    train_ds = input_pipeline.sentence_dataset_dict(
-        FLAGS.train,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-    )
-    train_iter = iter(train_ds)
+@tree.command()
+def no_log(config_path: Path = CONFIG_PATH):
+    assert GRAPHQL_ENDPOINT is not None
+    logger = RunLogger(GRAPHQL_ENDPOINT)
+    return no_sweep(logger=logger, **load_config(config_path))
 
-    eval_ds = input_pipeline.sentence_dataset_dict(
-        FLAGS.dev,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-        repeat=1,
-    )
 
-    model = models.Transformer(config)
+@tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
+def log(allow_dirty: bool = False, config_path: Path = CONFIG_PATH, **kwargs):
+    repo = Repo(".")
+    config = load_config(config_path)
+    config.update(kwargs)
+    return _log(**config, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
 
-    rng = random.PRNGKey(random_seed)
-    rng, init_rng = random.split(rng)
 
-    # call a jitted initialization function to get the initial parameter tree
-    @jax.jit
-    def initialize_variables(init_rng):
-        init_batch = jnp.ones((config.max_len, 1), jnp.float32)
-        init_variables = model.init(init_rng, inputs=init_batch, train=False)
-        return init_variables
+def _log(
+    allow_dirty: bool,
+    name: str,
+    repo: Repo,
+    sweep_id: Optional[int],
+    **kwargs,
+):
+    if not allow_dirty:
+        assert not repo.is_dirty()
 
-    init_variables = initialize_variables(init_rng)
-
-    learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
-
-    optimizer = optax.adamw(
-        learning_rate_fn, b1=0.9, b2=0.98, eps=1e-9, weight_decay=1e-1
-    )
-    state = train_state.TrainState.create(
-        apply_fn=model.apply, params=init_variables["params"], tx=optimizer
-    )
-
-    # Replicate optimizer.
-    state = jax_utils.replicate(state)
-
-    p_train_step = jax.pmap(
-        functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
-        axis_name="batch",
-        donate_argnums=(0,),
-    )  # pytype: disable=wrong-arg-types
-
-    def eval_step(params, batch):
-        """Calculate evaluation metrics on a batch."""
-        inputs, targets = batch["inputs"], batch["targets"]
-        weights = jnp.where(targets > 0, 1.0, 0.0)
-        logits = model.apply({"params": params}, inputs=inputs, train=False)
-        return compute_metrics(logits, targets, weights)
-
-    p_eval_step = jax.pmap(eval_step, axis_name="batch")
-
-    # We init the first set of dropout PRNG keys, but update it afterwards inside
-    # the main pmap'd training update for performance.
-    dropout_rngs = random.split(rng, jax.local_device_count())
-    metrics_all = []
-    # tick = time.time()
-    best_dev_score = 0
-    for step, batch in zip(range(num_train_steps), train_iter):
-        batch = common_utils.shard(
-            jax.tree_util.tree_map(lambda x: x._numpy(), batch)
-        )  # pylint: disable=protected-access
-
-        state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
-        metrics_all.append(metrics)
-        if (step + 1) % eval_freq == 0:
-            metrics_all = common_utils.get_metrics(metrics_all)
-            lr = metrics_all.pop("learning_rate").mean()
-            metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics_all)
-            denominator = metrics_sums.pop("denominator")
-            summary = jax.tree_util.tree_map(
-                lambda x: x / denominator, metrics_sums
-            )  # pylint: disable=cell-var-from-loop
-            summary["learning_rate"] = lr
-            logging.info("train in step: %d, loss: %.4f", step, summary["loss"])
-            # if jax.process_index() == 0:
-            #     tock = time.time()
-            #     steps_per_sec = eval_freq / (tock - tick)
-            #     tick = tock
-            # train_summary_writer.scalar("steps per second", steps_per_sec, step)
-            # for key, val in summary.items():
-            # train_summary_writer.scalar(key, val, step)
-            # train_summary_writer.flush()
-
-            metrics_all = []  # reset metric accumulation for next evaluation cycle.
-
-            eval_metrics = []
-            eval_iter = iter(eval_ds)
-
-            for eval_batch in eval_iter:
-                eval_batch = jax.tree_util.tree_map(
-                    lambda x: x._numpy(), eval_batch
-                )  # pylint: disable=protected-access
-                # Handle final odd-sized batch by padding instead of dropping it.
-                cur_pred_batch_size = eval_batch["inputs"].shape[0]
-                if cur_pred_batch_size != batch_size:
-                    # pad up to batch size
-                    eval_batch = jax.tree_util.tree_map(
-                        lambda x: pad_examples(x, batch_size), eval_batch
-                    )
-                eval_batch = common_utils.shard(eval_batch)
-
-                metrics = p_eval_step(state.params, eval_batch)
-
-                eval_metrics.append(metrics)
-            eval_metrics = common_utils.get_metrics(eval_metrics)
-            eval_metrics_sums = jax.tree_util.tree_map(jnp.sum, eval_metrics)
-            eval_denominator = eval_metrics_sums.pop("denominator")
-            eval_summary = jax.tree_util.tree_map(
-                lambda x: x / eval_denominator,  # pylint: disable=cell-var-from-loop
-                eval_metrics_sums,
+    metadata = dict(
+        reproducibility=(
+            dict(
+                command_line=f'python {" ".join(quote(arg) for arg in sys.argv)}',
+                time=time.strftime("%c"),
+                cwd=str(Path.cwd()),
+                commit=str(repo.commit()),
+                remotes=[*repo.remote().urls],
             )
+        ),
+        hostname=socket.gethostname(),
+    )
 
-            logging.info(
-                "eval in step: %d, loss: %.4f, accuracy: %.4f",
-                step,
-                eval_summary["loss"],
-                eval_summary["accuracy"],
-            )
+    visualizer_url = os.getenv("VISUALIZER_URL")
+    assert visualizer_url is not None, "VISUALIZER_URL must be set"
 
-            if best_dev_score < eval_summary["accuracy"]:
-                best_dev_score = eval_summary["accuracy"]
-                # TODO: save model.
-            eval_summary["best_dev_score"] = best_dev_score
-            logging.info("best development model score %.4f", best_dev_score)
-            # if jax.process_index() == 0:
-            # for key, val in eval_summary.items():
-            # eval_summary_writer.scalar(key, val, step)
-            # eval_summary_writer.flush()
+    def xy():
+        yield "hours", "accuracy"
+        for y in ["accuracy", "loss", "best dev score", "steps per second"]:
+            yield "step", y
+
+    charts = [
+        line.spec(color="run ID", x=x, y=y, visualizer_url=visualizer_url)
+        for x, y in xy()
+    ]
+
+    assert GRAPHQL_ENDPOINT is not None
+    logger = RunLogger(GRAPHQL_ENDPOINT)
+    logger.create_run(metadata=metadata, sweep_id=sweep_id, charts=charts)
+    logger.update_metadata(  # this updates the metadata stored in the database
+        dict(parameters=kwargs, run_id=logger.run_id, name=name)
+    )
+
+    (no_sweep if sweep_id is None else train)(**kwargs, logger=logger)
+
+
+def trainable(config: dict):
+    return _log(**config)
+
+
+@tree.subcommand(
+    parsers=dict(name=argument("name"), kwargs=nonpositional(ALLOW_DIRTY_FLAG))
+)
+def sweep(
+    name: str,
+    config_path: Path = CONFIG_PATH,
+    random_search: bool = False,
+    **kwargs,
+):
+    partial_config = load_config(config_path)
+    config: "dict[str, Any]" = dict(
+        name=name,
+        repo=Repo("."),
+        **kwargs,
+        **{
+            k: (tune.choice(v) if random_search else tune.grid_search(v))
+            if isinstance(v, list)
+            else v
+            for k, v in partial_config.items()
+        },
+    )
+    assert GRAPHQL_ENDPOINT is not None
+    sweep_id = create_sweep(
+        config=config_path,
+        graphql_endpoint=GRAPHQL_ENDPOINT,
+        log_level="INFO",
+        name=name,
+        project=None,
+    )
+    config.update(sweep_id=sweep_id)
+    ray.init()
+    analysis = tune.run(
+        trainable, config=config, resources_per_trial=dict(cpu=4, gpu=1)
+    )
+    print(analysis.stats())
 
 
 if __name__ == "__main__":
-    app.run(main)
+    tree()

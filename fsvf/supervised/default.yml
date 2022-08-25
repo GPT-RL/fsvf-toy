@@ -1,0 +1,6 @@
+batch_size: 64
+eval_frequency: 100
+num_train_steps: 75_000
+learning_rate: 0.05
+max_length: 256
+seed: 0

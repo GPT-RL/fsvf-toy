@@ -13,10 +13,8 @@
 # limitations under the License.
 
 """Library file which executes the PPO training."""
-
 import functools
 import itertools
-import logging
 import os
 import re
 import time
@@ -30,6 +28,7 @@ import jax.numpy as jnp
 import jax.random
 import numpy as np
 import optax
+import tensorflow as tf
 from flax import linen as nn
 from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
@@ -320,8 +319,6 @@ def train(
     lambda_: float,
     # The learning rate for the Adam optimizer.
     learning_rate: float,
-    # If not none, parameters will be loaded from this path.
-    load_dir: Optional[str],
     # number of updates between logs
     log_frequency: int,
     # logger for logging to Hasura
@@ -357,6 +354,7 @@ def train(
     Returns:
       optimizer: the trained optimizer
     """
+    tf.config.experimental.set_visible_devices([], "GPU")
     console = Console()
     if render:
         num_agents = 1
@@ -390,9 +388,6 @@ def train(
         obs_shape=obs_shape,
         seed=seed,
     )
-    if load_dir is not None:
-        logging.info("Loading model from %s", load_dir)
-        state = checkpoints.restore_checkpoint(load_dir, state)
 
     save_count = 0
     start_step = int(state.step) // num_epochs // iterations_per_step

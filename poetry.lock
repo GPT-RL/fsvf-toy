@@ -1389,7 +1389,7 @@ PyYAML = "^6.0"
 type = "git"
 url = "https://github.com/run-tracker/run-logger.git"
 reference = "main"
-resolved_reference = "63e05f406da4e79a6d991a7ea5009563bf098fe6"
+resolved_reference = "284088691351fe9eb50b1750ecae6511b3fc76b3"
 
 [[package]]
 name = "scipy"

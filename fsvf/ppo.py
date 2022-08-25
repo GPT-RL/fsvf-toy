@@ -15,7 +15,6 @@
 # See issue #620.
 # pytype: disable=wrong-keyword-args
 
-import logging
 import os
 import socket
 import sys
@@ -24,19 +23,32 @@ from pathlib import Path
 from shlex import quote
 from typing import Any, Mapping, Optional
 
+import line
 import ray
-import tensorflow as tf
 import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git.repo import Repo
-from ppo import line
 from ppo.lib import GRAPHQL_ENDPOINT, train
 from ray import tune
+from rich.console import Console
 from run_logger import RunLogger, create_sweep
 
+console = Console()
 tree = CommandTree()
-DEFAULT_CONFIG = Path("ppo/config.yml")
+CONFIG_PATH = Path("fsvf/ppo/config.yml")
+DEFAULTS_PATH = Path("fsvf/ppo/default.yml")
 ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
+
+
+def load_config(config_path: Path) -> dict[str, Any]:
+    with DEFAULTS_PATH.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    if config_path.exists():
+        with config_path.open() as f:
+            config.update(yaml.load(f, Loader=yaml.FullLoader))
+    else:
+        console.log(f"No config file found at {config_path}")
+    return config
 
 
 def param_generator(params: Any):
@@ -61,38 +73,32 @@ def param_generator(params: Any):
 def no_sweep(**kwargs):
     for params in param_generator(kwargs):
         train(**params)
-        logging.info("Done!")
+        console.log("Done!")
 
 
 @tree.command()
 def no_log(
-    config_path: Path = DEFAULT_CONFIG,
-    load_dir: Optional[Path] = None,
+    config_path: Path = CONFIG_PATH,
     render: bool = False,
 ):
-    # Make sure tf does not allocate gpu memory.
-    tf.config.experimental.set_visible_devices([], "GPU")
-    with config_path.open() as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+    kwargs = load_config(config_path)
 
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
-    if config["save_frequency"] != 0:
-        logging.info("Setting save_frequency to 0.")
-    config.update(save_frequency=0)
+    if kwargs["save_frequency"] != 0:
+        console.log("Setting save_frequency to 0.")
+    kwargs.update(save_frequency=0)
     return no_sweep(
-        **config,
-        load_dir=load_dir,
+        **kwargs,
         logger=logger,
         render=render,
     )
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
-def log(allow_dirty: bool = False, config_path: Path = DEFAULT_CONFIG, **kwargs):
+def log(allow_dirty: bool = False, config_path: Path = CONFIG_PATH, **kwargs):
     repo = Repo(".")
-    with config_path.open() as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+    config = load_config(config_path)
     config.update(kwargs)
     return _log(**config, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
 
@@ -137,16 +143,10 @@ def _log(
     logger = RunLogger(GRAPHQL_ENDPOINT)
     logger.create_run(metadata=metadata, sweep_id=sweep_id, charts=charts)
     logger.update_metadata(  # this updates the metadata stored in the database
-        dict(
-            parameters=kwargs,
-            run_id=logger.run_id,
-            name=name,
-        )
+        dict(parameters=kwargs, run_id=logger.run_id, name=name)
     )
 
-    (no_sweep if sweep_id is None else train)(
-        **kwargs, load_dir=None, logger=logger, render=False
-    )
+    (no_sweep if sweep_id is None else train)(**kwargs, logger=logger, render=False)
 
 
 def trainable(config: dict):
@@ -158,13 +158,11 @@ def trainable(config: dict):
 )
 def sweep(
     name: str,
-    config_path: Path = DEFAULT_CONFIG,
+    config_path: Path = CONFIG_PATH,
     random_search: bool = False,
     **kwargs,
 ):
-    with config_path.open() as f:
-        partial_config = yaml.load(f, yaml.FullLoader)
-
+    partial_config = load_config(config_path)
     config: "dict[str, Any]" = dict(
         name=name,
         repo=Repo("."),
