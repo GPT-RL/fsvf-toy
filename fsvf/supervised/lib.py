@@ -151,17 +151,17 @@ def compute_metrics(logits, labels, weights):
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
-    train_keys = ["inputs", "targets"]
-    (inputs, targets) = (batch.get(k, None) for k in train_keys)
+    targets = batch["value"]
 
     weights = jnp.where(targets > 0, 1, 0).astype(jnp.float32)
 
     dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
     def loss_fn(params):
+        breakpoint()
         """loss function used for training."""
         logits = model.apply(
-            {"params": params}, inputs=inputs, train=True, rngs={"dropout": dropout_rng}
+            {"params": params}, inputs=batch, train=True, rngs={"dropout": dropout_rng}
         )
         loss, weight_sum = compute_weighted_cross_entropy(logits, targets, weights)
 

@@ -6,30 +6,38 @@ import jax.numpy as jnp
 import optax
 import supervised.dataset  # noqa: F401
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
+from jax.config import config
+from returns.pipeline import flow
 from rich.console import Console
 from run_logger import RunLogger
-from supervised import input_pipeline, models
+from supervised import models
 from supervised.lib import (
     compute_metrics,
     create_learning_rate_scheduler,
     pad_examples,
     train_step,
 )
+from tensorflow.python.ops.numpy_ops import np_config
+
+config.update("jax_disable_jit", True)
 
 
 def train(
     batch_size: int,
-    context_size: int,
+    steps_per_prompt: int,
     data_dir: str,
     dev: str,
     download_dir: str,
+    dropout_rate: float,
     gamma: float,
     learning_rate: float,
     logger: RunLogger,
     max_dataset_step: int,
+    num_actions: int,
     num_train_steps: int,
     eval_frequency: int,
     seed: int,
@@ -38,73 +46,56 @@ def train(
 ):
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
+    np_config.enable_numpy_behavior()
     console = Console()
+
+    console.log("Loading data...")
+    ds_name = "my_dataset"
+    builder_kwargs = dict(
+        context_size=steps_per_prompt,
+        gamma=gamma,
+        max_checkpoint=max_dataset_step,
+        test_size=test_size,
+    )
+    download_and_prepare_kwargs = dict(download_dir=download_dir)
+    tfds.builder(ds_name, data_dir=data_dir, **builder_kwargs).download_and_prepare(
+        **download_and_prepare_kwargs
+    )
+    ds = tfds.load(
+        ds_name,
+        builder_kwargs=builder_kwargs,
+        download_and_prepare_kwargs=download_and_prepare_kwargs,
+    )
     if batch_size % jax.device_count() > 0:
         raise ValueError("Batch size must be divisible by the number of devices")
-    vocabs = input_pipeline.create_vocabs(train)
 
+    console.log("Creating model...")
     # create the training and development dataset
-    config = models.TransformerConfig(
-        vocab_size=len(vocabs["forms"]),
-        output_vocab_size=len(vocabs["xpos"]),
-        max_len=context_size // 2,
+    config = models.TransformerConfig()
+    train_iter = ds["train"].batch(batch_size)
+    init_batch = flow(train_iter, tfds.as_numpy, iter, next)
+    model = models.Transformer(
+        config=config, dropout_rate=dropout_rate, num_actions=num_actions
     )
-    attributes_input = [input_pipeline.CoNLLAttributes.FORM]
-    attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
-    # ds_name = "my_dataset"
-    # builder_kwargs = dict(
-    #     context_size=config.max_len,
-    #     gamma=gamma,
-    #     max_checkpoint=max_dataset_step,
-    #     test_size=test_size,
-    # )
-    # download_and_prepare_kwargs = dict(download_dir=download_dir)
-    # tfds.builder(ds_name, data_dir=data_dir, **builder_kwargs).download_and_prepare(
-    #     **download_and_prepare_kwargs
-    # )
-    # ds = tfds.load(
-    #     ds_name,
-    #     builder_kwargs=builder_kwargs,
-    #     download_and_prepare_kwargs=download_and_prepare_kwargs,
-    # )
-    # train_iter = iter(ds["train"])
-    train_ds = input_pipeline.sentence_dataset_dict(
-        train,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-    )
-    train_iter = iter(train_ds)
-    eval_ds = input_pipeline.sentence_dataset_dict(
-        dev,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-        repeat=1,
-    )
-    model = models.Transformer(config)
 
     rng = random.PRNGKey(seed)
     rng, init_rng = random.split(rng)
 
     # call a jitted initialization function to get the initial parameter tree
     @jax.jit
-    def initialize_variables(init_rng):
-        init_batch = jnp.ones((config.max_len, 1), jnp.float32)  # TODO
+    def initialize_variables(init_rng, init_batch):
         init_variables = model.init(init_rng, inputs=init_batch, train=False)
         return init_variables
 
-    init_variables = initialize_variables(init_rng)
+    console.log("Initializing variables...")
+    init_variables = initialize_variables(init_rng, init_batch)
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
     optimizer = optax.adamw(
         learning_rate_fn, b1=0.9, b2=0.98, eps=1e-9, weight_decay=1e-1
     )
+    console.log("Creating train state...")
     state = train_state.TrainState.create(
         apply_fn=model.apply, params=init_variables["params"], tx=optimizer
     )
@@ -133,11 +124,13 @@ def train(
     metrics_all = []
     tick = time.time()
     best_dev_score = 0
+    console.log("Training...")
     for step, batch in zip(range(num_train_steps), train_iter):
-        batch = common_utils.shard(
-            jax.tree_util.tree_map(lambda x: x._numpy(), batch)
+        common_utils.shard(
+            jax.tree_util.tree_map(lambda x: x.numpy(), batch)
         )  # pylint: disable=protected-access
 
+        breakpoint()
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         metrics_all.append(metrics)
         if (step + 1) % eval_frequency == 0:
@@ -163,12 +156,12 @@ def train(
             metrics_all = []  # reset metric accumulation for next evaluation cycle.
 
             eval_metrics = []
-            eval_iter = iter(eval_ds)
-            # eval_iter = iter(ds["test"])
+            # eval_iter = iter(eval_ds)
+            eval_iter = ds["eval"].batch(batch_size)
 
             for eval_batch in eval_iter:
                 eval_batch = jax.tree_util.tree_map(
-                    lambda x: x._numpy(), eval_batch
+                    lambda x: x.numpy(), eval_batch
                 )  # pylint: disable=protected-access
                 # Handle final odd-sized batch by padding instead of dropping it.
                 cur_pred_batch_size = eval_batch["inputs"].shape[0]

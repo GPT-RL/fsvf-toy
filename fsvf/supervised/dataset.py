@@ -9,10 +9,13 @@ from etils.epath.abstract_path import Path
 from ppo.agent import ExpTuple
 from returns.curry import partial
 from returns.pipeline import flow
+from rich.console import Console
 from tensorflow.data import Dataset
 from tensorflow_datasets.core import DatasetInfo, GeneratorBasedBuilder, Version
 from tensorflow_datasets.core.download import DownloadManager
 from tensorflow_datasets.core.features import FeaturesDict, Tensor
+
+console = Console()
 
 
 @dataclass
@@ -65,7 +68,7 @@ class MyDataset(GeneratorBasedBuilder):
                 asdict(
                     DataPoint(
                         time_step=Tensor(shape=[b], dtype=tf.int64),
-                        state=Tensor(shape=[b, 1, 5, 5, 3], dtype=tf.int64),
+                        state=Tensor(shape=[b, 5, 5, 3], dtype=tf.int64),
                         action=Tensor(shape=[b], dtype=tf.int64),
                         value=Tensor(shape=[b], dtype=tf.float64),
                     )
@@ -84,6 +87,7 @@ class MyDataset(GeneratorBasedBuilder):
 
         checkpoint_idxs = set(get_checkpoint_idxs())
         assert checkpoint_idxs
+        assert len(checkpoint_idxs) > self.test_size
         test_idxs = flow(
             checkpoint_idxs,
             list,
@@ -108,6 +112,7 @@ class MyDataset(GeneratorBasedBuilder):
         def generate_episode():
             # TODO: optimize this loop
             for npzpath in path.glob("*.npz"):
+                console.log(npzpath)
                 episode = flow(
                     npzpath,
                     np.load,
@@ -151,6 +156,5 @@ class MyDataset(GeneratorBasedBuilder):
         ds = tfds.as_numpy(ds)
         for ts in ds:  # type: ignore
             dp = DataPoint(**ts)
-            join = np.str.join  # type: ignore
-            key = f"{path.stem}_{join('_', dp.time_step.astype(str))}"
+            key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"
             yield key, ts
