@@ -19,10 +19,10 @@ import multiprocessing
 from dataclasses import dataclass
 from typing import Any, Callable
 
-import env_utils
 import flax
 import jax
 import numpy as np
+import ppo.env_utils as env_utils
 
 
 @functools.partial(jax.jit, static_argnums=0)

@@ -24,19 +24,18 @@ from pathlib import Path
 from shlex import quote
 from typing import Any, Mapping, Optional
 
-import line
 import ray
 import tensorflow as tf
 import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git.repo import Repo
-from lib import train
+from ppo import line
+from ppo.lib import GRAPHQL_ENDPOINT, train
 from ray import tune
 from run_logger import RunLogger, create_sweep
 
 tree = CommandTree()
-DEFAULT_CONFIG = Path("config.yml")
-GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
+DEFAULT_CONFIG = Path("ppo/config.yml")
 ALLOW_DIRTY_FLAG = flag("allow_dirty", default=False)
 
 

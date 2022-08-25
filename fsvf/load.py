@@ -20,14 +20,17 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-import agent
-import env_utils
 import flax
 import numpy as np
 from dollar_lambda import argument, command
 from flax.training import checkpoints
-from lib import build_model, compute_step_values, get_initial_state
-from main import GRAPHQL_ENDPOINT
+from ppo import agent, env_utils
+from ppo.lib import (
+    GRAPHQL_ENDPOINT,
+    build_model,
+    compute_step_values,
+    get_initial_state,
+)
 from run_logger import RunLogger, get_load_params
 
 

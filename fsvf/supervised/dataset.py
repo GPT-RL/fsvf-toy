@@ -5,8 +5,8 @@ from typing import Any, Iterator
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from agent import ExpTuple
 from etils.epath.abstract_path import Path
+from ppo.agent import ExpTuple
 from returns.curry import partial
 from returns.pipeline import flow
 from tensorflow.data import Dataset

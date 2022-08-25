@@ -24,23 +24,25 @@ from dataclasses import asdict, astuple
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
 
-import env_utils
 import flax
 import jax
 import jax.numpy as jnp
 import jax.random
 import numpy as np
 import optax
-from agent import ExpTuple, RemoteSimulator, policy_action
 from flax import linen as nn
 from flax.training import checkpoints, train_state
 from gym_minigrid.minigrid import MiniGridEnv
 from jax.tree_util import tree_map
-from models import OneHotConv, RGBConv, TwoLayer
+from ppo import env_utils
+from ppo.agent import ExpTuple, RemoteSimulator, policy_action
+from ppo.models import OneHotConv, RGBConv, TwoLayer
 from returns.curry import partial
 from returns.pipeline import flow
 from rich.console import Console
 from run_logger import RunLogger
+
+GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 
 
 @jax.jit

@@ -18,7 +18,7 @@ import os
 from pprint import pprint
 from typing import Optional
 
-import dataset  # noqa: F401
+import supervised.dataset as dataset  # noqa: F401
 import tensorflow_datasets as tfds
 from dollar_lambda import command
 

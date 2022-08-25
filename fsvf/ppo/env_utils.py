@@ -24,7 +24,6 @@ from typing import Any, ClassVar, Optional
 
 import gym
 import numpy as np
-import seed_rl_atari_preprocessing
 from art import text2art
 from gym import RewardWrapper, Space  # type: ignore
 from gym.core import ObservationWrapper
@@ -32,6 +31,7 @@ from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym.wrappers.time_limit import TimeLimit
 from gym_minigrid.minigrid import Goal, Grid, MiniGridEnv, MissionSpace
 from gym_minigrid.wrappers import ImgObsWrapper, RGBImgObsWrapper
+from ppo import seed_rl_atari_preprocessing
 from returns.curry import partial
 from returns.pipeline import flow, pipe
 from rich.console import Console
