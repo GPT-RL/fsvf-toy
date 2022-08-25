@@ -57,12 +57,13 @@ def train(
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
+    kwargs = dict(name=ds_name, data_dir=data_dir)
     download_and_prepare_kwargs = dict(download_dir=download_dir)
-    tfds.builder(ds_name, data_dir=data_dir, **builder_kwargs).download_and_prepare(
+    tfds.builder(**kwargs, **builder_kwargs).download_and_prepare(
         **download_and_prepare_kwargs
     )
     ds = tfds.load(
-        ds_name,
+        **kwargs,
         builder_kwargs=builder_kwargs,
         download_and_prepare_kwargs=download_and_prepare_kwargs,
     )
@@ -73,7 +74,8 @@ def train(
     # create the training and development dataset
     config = models.TransformerConfig()
     train_iter = ds["train"].batch(batch_size)
-    init_batch = flow(train_iter, tfds.as_numpy, iter, next)
+    train_iter = tfds.as_numpy(train_iter)
+    init_batch = flow(train_iter, iter, next)
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
     )
@@ -103,10 +105,11 @@ def train(
     # Replicate optimizer.
     state = jax_utils.replicate(state)
 
-    p_train_step = jax.pmap(
+    p_train_step = jax.vmap(  # TODO: pmap
         functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
-        axis_name="batch",
-        donate_argnums=(0,),
+        in_axes=0,
+        # axis_name="batch",
+        # donate_argnums=(0,),
     )  # pytype: disable=wrong-arg-types
 
     def eval_step(params, batch):
@@ -126,11 +129,12 @@ def train(
     best_dev_score = 0
     console.log("Training...")
     for step, batch in zip(range(num_train_steps), train_iter):
-        common_utils.shard(
-            jax.tree_util.tree_map(lambda x: x.numpy(), batch)
-        )  # pylint: disable=protected-access
-
+        batch = common_utils.shard(
+            batch
+            # jax.tree_util.tree_map(lambda x: x.(), batch)
+        )
         breakpoint()
+
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         metrics_all.append(metrics)
         if (step + 1) % eval_frequency == 0:

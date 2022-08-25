@@ -23,22 +23,30 @@ from returns.curry import partial
 from returns.pipeline import flow
 from supervised.dataset import DataPoint
 
+xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
+normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
+
 
 @dataclass
 class TransformerConfig:
     """Global hyperparameters used to minimize obnoxious kwarg plumbing."""
 
     attention_dropout_rate: float = 0.3
-    bias_init: Callable = nn.initializers.normal(stddev=1e-6)
+    bias_init: Callable = normal
     dropout_rate: float = 0.3
     dtype: Any = jnp.float32
-    emb_dim: int = 512
-    kernel_init: Callable = nn.initializers.xavier_uniform()
-    mlp_dim: int = 2048
-    num_heads: int = 8
-    num_layers: int = 6
-    posemb_init: Optional[Callable] = None
-    qkv_dim: int = 512
+    emb_dim: int = 16
+    kernel_init: Callable = xavier_uniform
+    mlp_dim: int = 32
+    num_heads: int = 2
+    num_layers: int = 1
+    qkv_dim: int = 64
+    # emb_dim: int = 512
+    # kernel_init: Callable = nn.initializers.xavier_uniform()
+    # mlp_dim: int = 2048
+    # num_heads: int = 8
+    # num_layers: int = 6
+    # qkv_dim: int = 512
 
 
 class MlpBlock(nn.Module):
@@ -147,19 +155,23 @@ class Transformer(nn.Module):
         state = flow(
             inputs.state.reshape(-1, *state_shape),
             nn.Conv(
-                features=32,
+                features=self.config.emb_dim,
                 kernel_size=(3, 3),
                 strides=(1, 1),
                 dtype=jnp.float32,
                 padding=0,
             ),
-        ).reshape(b, l, -1, 32)
+        ).reshape(b, l, -1, self.config.emb_dim)
         action = flow(
             inputs.action.astype(jnp.int32),
-            nn.Embed(num_embeddings=self.num_actions, features=32, dtype=jnp.int32),
-            partial(jnp.reshape, newshape=(b, l, 1, 32)),
+            nn.Embed(
+                num_embeddings=self.num_actions,
+                features=self.config.emb_dim,
+                dtype=jnp.int32,
+            ),
+            partial(jnp.reshape, newshape=(b, l, 1, self.config.emb_dim)),
         )
-        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(32))
+        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
         x = jnp.concatenate([state, action, value], axis=-2)
         _, _, *x_shape = x.shape  # type: ignore
         initializer = nn.initializers.normal()  # type: ignore
@@ -169,7 +181,7 @@ class Transformer(nn.Module):
 
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = x + position_embedding
-        x = x.reshape(b, -1, 32)
+        x = x.reshape(b, -1, self.config.emb_dim)
         x = x[:, :-1]  # exclude target
 
         for _ in range(self.config.num_layers):
