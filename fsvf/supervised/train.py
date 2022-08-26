@@ -77,7 +77,9 @@ def train(
     config = models.TransformerConfig()
     train_iter = ds["train"]  # type: ignore
     train_iter = tfds.as_numpy(
-        train_iter.repeat().batch(batch_size, drop_remainder=True)
+        train_iter.shuffle(len(train_iter))
+        .repeat()
+        .batch(batch_size, drop_remainder=True)
     )
     init_batch = flow(train_iter, iter, next)
     model = models.Transformer(
@@ -150,7 +152,11 @@ def train(
 
             eval_metrics = []
             ds_eval = ds["test"]  # type: ignore
-            eval_iter = ds_eval.repeat().batch(batch_size, drop_remainder=True)
+            eval_iter = (
+                ds_eval.shuffle(len(ds_eval))
+                .repeat()
+                .batch(batch_size, drop_remainder=True)
+            )
 
             for eval_batch in eval_iter:
                 eval_batch = jax.tree_util.tree_map(
