@@ -1,4 +1,3 @@
-import functools
 import time
 from pathlib import Path
 
@@ -11,16 +10,13 @@ import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
-from returns.pipeline import flow
+from returns.curry import partial
+from returns.pipeline import flow, pipe
 from rich.console import Console
 from run_logger import RunLogger
 from supervised import models
-from supervised.lib import (
-    compute_metrics,
-    create_learning_rate_scheduler,
-    pad_examples,
-    train_step,
-)
+from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
+from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 
 
@@ -80,7 +76,9 @@ def train(
     # create the training and development dataset
     config = models.TransformerConfig()
     train_iter = ds["train"]  # type: ignore
-    train_iter = tfds.as_numpy(train_iter.batch(batch_size, drop_remainder=True))
+    train_iter = tfds.as_numpy(
+        train_iter.repeat().batch(batch_size, drop_remainder=True)
+    )
     init_batch = flow(train_iter, iter, next)
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
@@ -112,94 +110,74 @@ def train(
     state = jax_utils.replicate(state)
 
     p_train_step = jax.pmap(
-        functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
+        partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         in_axes=0,
         donate_argnums=(0,),
     )
 
-    def eval_step(params, batch):
-        """Calculate evaluation metrics on a batch."""
-        inputs, targets = batch["inputs"], batch["targets"]
-        weights = jnp.where(targets > 0, 1.0, 0.0)
-        logits = model.apply({"params": params}, inputs=inputs, train=False)
-        return compute_metrics(logits, targets, weights)
+    p_eval_step = jax.pmap(partial(eval_step, model=model), in_axes=0)
 
-    p_eval_step = jax.pmap(eval_step, axis_name="batch")
+    process_metrics = pipe(jnp.mean, lambda x: x.item())
 
     # We init the first set of dropout PRNG keys, but update it afterwards inside
     # the main pmap'd training update for performance.
     dropout_rngs = random.split(rng, jax.local_device_count())
-    metrics_all = []
+    train_metrics = []
     tick = time.time()
     best_dev_score = 0
     console.log("Training...")
     for step, batch in zip(range(num_train_steps), train_iter):  # type: ignore
         batch = common_utils.shard(batch)
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
-        metrics_all.append(metrics)
+        train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
-            metrics_all = common_utils.get_metrics(metrics_all)
-            lr = metrics_all.pop("learning rate").mean()
-            metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics_all)
-            denominator = metrics_sums.pop("denominator")
-            summary = jax.tree_util.tree_map(lambda x: x / denominator, metrics_sums)
-            summary["learning rate"] = lr
             if jax.process_index() == 0:
                 steps_per_sec = eval_frequency / (time.time() - tick)
+                train_metrics = common_utils.get_metrics(train_metrics)
+                train_summary = jax.tree_util.tree_map(process_metrics, train_metrics)
                 log = {
                     "run ID": logger.run_id,
                     "steps per second": steps_per_sec,
                     "step": step,
+                    "hours": (time.time() - tick) / 3600,
+                    **train_summary,
                 }
                 console.log(log)
                 if logger.run_id is not None:
                     logger.log(**log)
 
-            metrics_all = []  # reset metric accumulation for next evaluation cycle.
+            train_metrics = []  # reset metric accumulation for next evaluation cycle.
 
             eval_metrics = []
-            # eval_iter = iter(eval_ds)
-
-            ds_eval = ds["eval"]  # type: ignore
-            eval_iter = ds_eval.batch(batch_size)
+            ds_eval = ds["test"]  # type: ignore
+            eval_iter = ds_eval.repeat().batch(batch_size, drop_remainder=True)
 
             for eval_batch in eval_iter:
                 eval_batch = jax.tree_util.tree_map(
                     lambda x: x.numpy(), eval_batch
                 )  # pylint: disable=protected-access
-                # Handle final odd-sized batch by padding instead of dropping it.
-                cur_pred_batch_size = eval_batch["inputs"].shape[0]
-                if cur_pred_batch_size != batch_size:
-                    # pad up to batch size
-                    eval_batch = jax.tree_util.tree_map(
-                        lambda x: pad_examples(x, batch_size), eval_batch
-                    )
+                if not flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size:
+                    breakpoint()
                 eval_batch = common_utils.shard(eval_batch)
 
                 metrics = p_eval_step(state.params, eval_batch)
 
                 eval_metrics.append(metrics)
             eval_metrics = common_utils.get_metrics(eval_metrics)
-            eval_metrics_sums = jax.tree_util.tree_map(jnp.sum, eval_metrics)
-            eval_denominator = eval_metrics_sums.pop("denominator")
-            eval_summary = jax.tree_util.tree_map(
-                lambda x: x / eval_denominator,  # pylint: disable=cell-var-from-loop
-                eval_metrics_sums,
-            )
+            eval_summary = jax.tree_util.tree_map(process_metrics, eval_metrics)
 
-            if best_dev_score < eval_summary["accuracy"]:
-                best_dev_score = eval_summary["accuracy"]
+            if best_dev_score > eval_summary["error"]:
+                best_dev_score = eval_summary["error"]
                 # TODO: save model.
             eval_summary["best dev score"] = best_dev_score
             if jax.process_index() == 0:
-                log = {k: v.to_py().item() for k, v in eval_summary.items()}
-                log.update(
+                eval_summary.update(
                     {
                         "run ID": logger.run_id,
                         "step": step,
                         "hours": (time.time() - tick) / 3600,
                     }
                 )
-                console.log(log)
+                console.log(eval_summary)
                 if logger.run_id is not None:
-                    logger.log(**log)
+                    logger.log(**eval_summary)

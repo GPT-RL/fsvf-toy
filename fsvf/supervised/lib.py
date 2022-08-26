@@ -111,42 +111,25 @@ def compute_weighted_cross_entropy(logits, targets, weights=None):
     return loss.sum(), normalizing_factor
 
 
-def compute_weighted_accuracy(logits, targets, weights=None):
-    """Compute weighted accuracy for log probs and targets.
-
-    Args:
-     logits: [batch, length, num_classes] float array.
-     targets: categorical targets [batch, length] int array.
-     weights: None or array of shape [batch x length]
-
-    Returns:
-      Tuple of scalar accuracy and batch normalizing factor.
-    """
-    if logits.ndim != targets.ndim + 1:
-        raise ValueError(
-            "Incorrect shapes. Got shape %s logits and %s targets"
-            % (str(logits.shape), str(targets.shape))
-        )
-    loss = jnp.equal(jnp.argmax(logits, axis=-1), targets)
-    normalizing_factor = np.prod(logits.shape[:-1])
-    if weights is not None:
-        loss = loss * weights
-        normalizing_factor = weights.sum()
-
-    return loss.sum(), normalizing_factor
+def compute_loss(estimate, targets):
+    return jnp.mean(jnp.square(estimate - targets))
 
 
-def compute_metrics(logits, labels, weights):
+def compute_metrics(estimate, targets):
     """Compute summary metrics."""
-    loss, weight_sum = compute_weighted_cross_entropy(logits, labels, weights)
-    acc, _ = compute_weighted_accuracy(logits, labels, weights)
-    metrics = {
+    loss = compute_loss(estimate, targets)
+    error = jnp.mean(jnp.abs(estimate - targets))
+    return {
         "loss": loss,
-        "accuracy": acc,
-        "denominator": weight_sum,
+        "error": error,
     }
-    metrics = np.sum(metrics, -1)
-    return metrics
+
+
+def eval_step(params, batch, model):
+    """Calculate evaluation metrics on a batch."""
+    targets = batch["value"][:, -1]
+    output = model.apply({"params": params}, inputs=batch, train=False)
+    return compute_metrics(output[:, -1, 0], targets)
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
@@ -160,17 +143,14 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
             {"params": params}, inputs=batch, train=True, rngs={"dropout": dropout_rng}
         )
         estimate = output[:, -1, 0]
-        return jnp.mean(jnp.square(estimate - targets))
+        return compute_loss(estimate, targets)
 
     lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn)
     loss, grads = grad_fn(state.params)
     # grads = jax.mean(grads, 0)
     new_state = state.apply_gradients(grads=grads)
-    metrics = {
-        "loss": loss,
-        "learning rate": lr,
-    }
+    metrics = {"loss": loss, "learning rate": lr}
     return new_state, metrics
 
 
