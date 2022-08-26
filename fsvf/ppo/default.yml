@@ -7,7 +7,7 @@ env_id: my-env-5x5
 gamma: 0.99
 lambda_: 0.95
 learning_rate: 0.0005
-log_frequency: 5
+log_frequency: 2
 num_agents: 32
 num_epochs: 3
 num_test_agents: 32
