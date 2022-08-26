@@ -1,5 +1,6 @@
 import functools
 import time
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -57,7 +58,13 @@ def train(
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
-    kwargs = dict(name="my_dataset", data_dir=data_dir)
+    data_dir = flow(
+        data_dir,
+        Path,
+        lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
+        str,
+    )
+    kwargs = dict(name="my_dataset", data_dir=str(data_dir))
     download_and_prepare_kwargs = dict(download_dir=download_dir)
     builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
     builder.download_and_prepare(**download_and_prepare_kwargs)
