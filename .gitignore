@@ -11,3 +11,4 @@ config.yml
 ppo/config.yml
 .vscode/
 Roms.rar
+ignore.py

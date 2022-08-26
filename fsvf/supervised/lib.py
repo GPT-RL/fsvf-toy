@@ -23,6 +23,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
+from rich.console import Console
 
 
 def create_learning_rate_scheduler(
@@ -115,21 +116,22 @@ def compute_loss(estimate, targets):
     return jnp.mean(jnp.square(estimate - targets))
 
 
-def compute_metrics(estimate, targets):
-    """Compute summary metrics."""
-    loss = compute_loss(estimate, targets)
-    error = jnp.mean(jnp.abs(estimate - targets))
-    return {
-        "loss": loss,
-        "error": error,
-    }
+def compute_error(estimate, targets):
+    return jnp.mean(jnp.abs(estimate - targets))
 
 
 def eval_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
     targets = batch["value"][:, -1]
     output = model.apply({"params": params}, inputs=batch, train=False)
-    return compute_metrics(output[:, -1, 0], targets)
+    estimate = output[:, -1, 0]
+    return {
+        "loss": compute_loss(estimate, targets),
+        "error": compute_error(estimate, targets),
+    }
+
+
+console = Console()
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
@@ -140,17 +142,20 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     def loss_fn(params):
         """loss function used for training."""
         output = model.apply(
-            {"params": params}, inputs=batch, train=True, rngs={"dropout": dropout_rng}
+            {"params": params},
+            inputs=batch,
+            train=True,
+            rngs={"dropout": dropout_rng},
         )
         estimate = output[:, -1, 0]
-        return compute_loss(estimate, targets)
+        return compute_loss(estimate, targets), compute_error(estimate, targets)
 
     lr = learning_rate_fn(state.step)
-    grad_fn = jax.value_and_grad(loss_fn)
-    loss, grads = grad_fn(state.params)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    (loss, error), grads = grad_fn(state.params)
     # grads = jax.mean(grads, 0)
     new_state = state.apply_gradients(grads=grads)
-    metrics = {"loss": loss, "learning rate": lr}
+    metrics = {"error": error, "learning rate": lr, "loss": loss}
     return new_state, metrics
 
 
