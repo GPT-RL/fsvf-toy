@@ -165,7 +165,7 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn)
     loss, grads = grad_fn(state.params)
-    grads = jax.mean(grads, 0)
+    # grads = jax.mean(grads, 0)
     new_state = state.apply_gradients(grads=grads)
     metrics = {
         "loss": loss,
