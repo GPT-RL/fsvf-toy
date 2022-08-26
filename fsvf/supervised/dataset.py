@@ -152,8 +152,12 @@ class MyDataset(GeneratorBasedBuilder):
                 )
 
         ds = reduce(lambda acc, new: acc.concatenate(new), generate_episode())
-        ds = ds.shuffle(len(ds)).batch(1 + self.context_size, drop_remainder=True)
-        ds = tfds.as_numpy(ds)
+        ds = tfds.as_numpy(
+            ds.shuffle(len(ds))
+            .repeat()
+            .batch(1 + self.context_size, drop_remainder=True)
+            .take(len(ds))
+        )
         for ts in ds:  # type: ignore
             dp = DataPoint(**ts)
             key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"

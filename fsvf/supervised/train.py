@@ -80,7 +80,7 @@ def train(
     # create the training and development dataset
     config = models.TransformerConfig()
     train_iter = ds["train"]  # type: ignore
-    train_iter = tfds.as_numpy(train_iter.batch(batch_size))
+    train_iter = tfds.as_numpy(train_iter.batch(batch_size, drop_remainder=True))
     init_batch = flow(train_iter, iter, next)
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
