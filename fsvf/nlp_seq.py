@@ -64,6 +64,9 @@ def no_log(config_path: Path = CONFIG_PATH):
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
 def log(allow_dirty: bool = False, config_path: Path = CONFIG_PATH, **kwargs):
     repo = Repo(".")
+    with config_path.open() as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    kwargs.update(config)
     return _log(**kwargs, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
 
 
