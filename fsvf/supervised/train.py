@@ -25,7 +25,6 @@ from tensorflow.python.ops.numpy_ops import np_config
 
 def train(
     batch_size: int,
-    steps_per_prompt: int,
     data_dir: str,
     disable_jit: bool,
     download_dir: str,
@@ -39,6 +38,7 @@ def train(
     run_logger: RunLogger,
     eval_frequency: int,
     seed: int,
+    steps_per_prompt: int,
     test_size: int,
 ):
     if disable_jit:
