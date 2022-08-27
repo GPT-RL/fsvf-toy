@@ -105,9 +105,9 @@ def _log(
     assert visualizer_url is not None, "VISUALIZER_URL must be set"
 
     def xy():
-        for x in ["step", "hours"]:
+        for x in ["frames", "hours", "steps"]:
             yield x, "return"
-        yield "step", "save count"
+        yield "steps", "save count"
 
     charts = [
         line.spec(color="run ID", x=x, y=y, visualizer_url=visualizer_url)

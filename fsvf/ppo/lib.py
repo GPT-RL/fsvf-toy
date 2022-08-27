@@ -451,7 +451,9 @@ def train(
                             console.log(f"Saved experience to {f.name}")
                             i += 1
             frames = step * num_agents * actor_steps
-            log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
+            log = dict(
+                frames=frames, hours=(time.time() - start_time) / 3600, steps=step
+            ) | {
                 "return": test_return,
                 "run ID": logger.run_id,
                 "save count": save_count,
