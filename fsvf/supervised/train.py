@@ -1,14 +1,12 @@
 import logging
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import optax
 import supervised.dataset  # noqa: F401
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
@@ -18,6 +16,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import models
+from supervised.input_pipeline import trajectory_dataset
 from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
@@ -67,37 +66,20 @@ def train(
         logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
 
     with timer("Loading data..."):
-        builder_kwargs = dict(
-            context_size=steps_per_prompt,
+        train_iter = trajectory_dataset(
+            batch_size=batch_size,
+            data_dir=data_dir,
+            download_dir=download_dir,
             gamma=gamma,
-            max_checkpoint=max_dataset_step,
+            max_dataset_step=max_dataset_step,
             test_size=test_size,
+            split="train",
+            steps_per_prompt=steps_per_prompt,
+            repeat=None,
         )
-        data_dir = flow(
-            data_dir,
-            Path,
-            lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
-            str,
-        )
-        kwargs = dict(name="my_dataset", data_dir=str(data_dir))
-        download_and_prepare_kwargs = dict(download_dir=download_dir)
-        builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
-        builder.download_and_prepare(**download_and_prepare_kwargs)
-        ds = tfds.load(
-            **kwargs,
-            builder_kwargs=builder_kwargs,
-            download_and_prepare_kwargs=download_and_prepare_kwargs,
-        )
-    # create the training and development dataset
-    config = models.TransformerConfig()
-    train_iter = ds["train"]  # type: ignore
-    train_iter = tfds.as_numpy(
-        train_iter.shuffle(len(train_iter))
-        .repeat()
-        .batch(batch_size, drop_remainder=True)
-    )
     init_batch = flow(train_iter, iter, next)
 
+    config = models.TransformerConfig()
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
     )
@@ -154,14 +136,20 @@ def train(
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
             eval_metrics = []
-            ds_eval = ds["test"]  # type: ignore
-            eval_iter = ds_eval.shuffle(len(ds_eval)).batch(
-                batch_size, drop_remainder=True
+            eval_iter = trajectory_dataset(
+                batch_size=batch_size,
+                data_dir=data_dir,
+                download_dir=download_dir,
+                gamma=gamma,
+                max_dataset_step=max_dataset_step,
+                test_size=test_size,
+                split="test",
+                steps_per_prompt=steps_per_prompt,
+                repeat=1,
             )
 
             with timer("Evaluating..."):
-                for eval_batch in eval_iter:
-                    eval_batch = jax.tree_util.tree_map(lambda x: x.numpy(), eval_batch)
+                for eval_batch in eval_iter:  # type: ignore
                     assert (
                         flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size
                     )
