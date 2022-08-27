@@ -21,6 +21,7 @@ from supervised import input_pipeline, models
 from supervised.lib import (
     compute_metrics,
     create_learning_rate_scheduler,
+    eval_step,
     pad_examples,
     train_step,
 )

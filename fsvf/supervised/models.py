@@ -14,22 +14,28 @@
 
 """Transformer-based language models."""
 
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
-from flax import struct
+from returns.curry import partial
+from returns.pipeline import flow
+from supervised.dataset import DataPoint
+
+xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
+normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
 
 
-@struct.dataclass
+@dataclass
 class TransformerConfig:
     """Global hyperparameters used to minimize obnoxious kwarg plumbing."""
 
     output_vocab_size: int
     vocab_size: int
     attention_dropout_rate: float = 0.3
-    bias_init: Callable = nn.initializers.normal(stddev=1e-6)
+    bias_init: Callable = normal
     dropout_rate: float = 0.3
     dtype: Any = jnp.float32
     emb_dim: int = 512
@@ -38,7 +44,6 @@ class TransformerConfig:
     mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
-    posemb_init: Optional[Callable] = None
     qkv_dim: int = 512
 
 
