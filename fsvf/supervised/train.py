@@ -32,6 +32,7 @@ def train(
     dropout_rate: float,
     gamma: float,
     learning_rate: float,
+    log_level: str,
     max_dataset_step: int,
     num_actions: int,
     num_train_steps: int,
@@ -39,7 +40,6 @@ def train(
     eval_frequency: int,
     seed: int,
     test_size: int,
-    log_level: str = "INFO",
 ):
     if disable_jit:
         from jax._src.config import config
