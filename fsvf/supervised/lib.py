@@ -23,7 +23,6 @@ import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
-from rich.console import Console
 
 
 def create_learning_rate_scheduler(
@@ -129,9 +128,6 @@ def eval_step(params, batch, model):
         "loss": compute_loss(estimate, targets),
         "error": compute_error(estimate, targets),
     }
-
-
-console = Console()
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
