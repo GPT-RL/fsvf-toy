@@ -1,9 +1,11 @@
 batch_size: 64
-context_size: 256
+dropout_rate: 0.3
 eval_frequency: 100
 gamma: 0.9
 learning_rate: 0.05
-max_dataset_step: 400_000
+max_dataset_step: 10_000
+num_actions: 5
 num_train_steps: 75_000
 seed: 0
-test_size: 30
+# steps_per_prompt: 10
+test_size: 5

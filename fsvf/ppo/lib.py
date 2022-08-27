@@ -436,7 +436,7 @@ def train(
                         clipped = clip(lambda s: s[:first_term_step])
                         assert clipped.done[-1]
                         unclipped = clip(lambda s: s[first_term_step:])
-                        step_dir = Path(download_dir) / str(step)
+                        step_dir = Path(download_dir) / str(logger.run_id) / str(step)
                         step_dir.mkdir(parents=True, exist_ok=True)
 
                         with Path(step_dir, f"{i}.npz").open("wb") as f:

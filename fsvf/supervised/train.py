@@ -1,15 +1,21 @@
-import functools
+import logging
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import optax
 import supervised.dataset  # noqa: F401
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
+from returns.curry import partial
+from returns.pipeline import flow, pipe
 from rich.console import Console
+from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import input_pipeline, models
 from supervised.lib import (
@@ -18,24 +24,40 @@ from supervised.lib import (
     pad_examples,
     train_step,
 )
+from supervised.models import TransformerConfig
+from tensorflow.data import Dataset  # type: ignore
+from tensorflow.python.ops.numpy_ops import np_config
 
 
 def train(
     batch_size: int,
-    context_size: int,
+    disable_jit: bool,
     data_dir: str,
     dev: str,
     download_dir: str,
+    dropout_rate: float,
     gamma: float,
     learning_rate: float,
-    logger: RunLogger,
+    log_level: str,
     max_dataset_step: int,
+    max_len: int,
+    num_actions: int,
     num_train_steps: int,
+    run_logger: RunLogger,
     eval_frequency: int,
     seed: int,
     test_size: int,
     train: str,
 ):
+    if disable_jit:
+        from jax._src.config import config
+
+        config.update("jax_disable_jit", True)
+
+    logging.basicConfig(datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level)
+
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
     console = Console()
@@ -44,10 +66,10 @@ def train(
     vocabs = input_pipeline.create_vocabs(train)
 
     # create the training and development dataset
-    config = models.TransformerConfig(
+    config = TransformerConfig(
         vocab_size=len(vocabs["forms"]),
         output_vocab_size=len(vocabs["xpos"]),
-        max_len=context_size // 2,
+        max_len=max_len,
     )
     attributes_input = [input_pipeline.CoNLLAttributes.FORM]
     attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
@@ -89,12 +111,13 @@ def train(
     model = models.Transformer(config)
 
     rng = random.PRNGKey(seed)
+    config.max_len
     rng, init_rng = random.split(rng)
 
     # call a jitted initialization function to get the initial parameter tree
     @jax.jit
     def initialize_variables(init_rng):
-        init_batch = jnp.ones((config.max_len, 1), jnp.float32)  # TODO
+        init_batch = jnp.ones((config.max_len, 1), jnp.float32)  # type: ignore
         init_variables = model.init(init_rng, inputs=init_batch, train=False)
         return init_variables
 
@@ -113,7 +136,7 @@ def train(
     state = jax_utils.replicate(state)
 
     p_train_step = jax.pmap(
-        functools.partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
+        partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         axis_name="batch",
         donate_argnums=(0,),
     )  # pytype: disable=wrong-arg-types
@@ -152,13 +175,13 @@ def train(
             if jax.process_index() == 0:
                 steps_per_sec = eval_frequency / (time.time() - tick)
                 log = {
-                    "run ID": logger.run_id,
+                    "run ID": run_logger.run_id,
                     "steps per second": steps_per_sec,
                     "step": step,
                 }
                 console.log(log)
-                if logger.run_id is not None:
-                    logger.log(**log)
+                if run_logger.run_id is not None:
+                    run_logger.log(**log)
 
             metrics_all = []  # reset metric accumulation for next evaluation cycle.
 
@@ -198,11 +221,11 @@ def train(
                 log = {k: v.to_py().item() for k, v in eval_summary.items()}
                 log.update(
                     {
-                        "run ID": logger.run_id,
+                        "run ID": run_logger.run_id,
                         "step": step,
                         "hours": (time.time() - tick) / 3600,
                     }
                 )
                 console.log(log)
-                if logger.run_id is not None:
-                    logger.log(**log)
+                if run_logger.run_id is not None:
+                    run_logger.log(**log)

@@ -12,11 +12,9 @@ import yaml
 from dollar_lambda import CommandTree, argument, flag, nonpositional
 from git.repo import Repo
 from ray import tune
-from rich.console import Console
 from run_logger import RunLogger, create_sweep
 from supervised.train import train
 
-console = Console()
 tree = CommandTree()
 CONFIG_PATH = Path("fsvf/supervised/config.yml")
 DEFAULTS_PATH = Path("fsvf/supervised/default.yml")
@@ -46,11 +44,11 @@ def param_generator(params: Any):
 def no_sweep(**kwargs):
     for params in param_generator(kwargs):
         train(**params)
-        console.log("Done!")
+        print("Done!")
 
 
 @tree.command()
-def no_log(config_path: Path = CONFIG_PATH):
+def no_log(config_path: Path = CONFIG_PATH, disable_jit: bool = False):
     assert GRAPHQL_ENDPOINT is not None
     logger = RunLogger(GRAPHQL_ENDPOINT)
     with DEFAULTS_PATH.open() as f:
@@ -58,7 +56,9 @@ def no_log(config_path: Path = CONFIG_PATH):
     with config_path.open() as f:
         without_defaults = yaml.load(f, Loader=yaml.FullLoader)
     with_defaults.update(without_defaults)
-    return no_sweep(logger=logger, **with_defaults)
+    return no_sweep(
+        disable_jit=disable_jit, log_level="INFO", run_logger=logger, **with_defaults
+    )
 
 
 @tree.subcommand(parsers=dict(kwargs=nonpositional(argument("name"))))
@@ -67,7 +67,9 @@ def log(allow_dirty: bool = False, config_path: Path = CONFIG_PATH, **kwargs):
     with config_path.open() as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     kwargs.update(config)
-    return _log(**kwargs, allow_dirty=allow_dirty, repo=repo, sweep_id=None)
+    return _log(
+        **kwargs, allow_dirty=allow_dirty, log_level="INFO", repo=repo, sweep_id=None
+    )
 
 
 def _log(
@@ -115,7 +117,9 @@ def _log(
     with DEFAULTS_PATH.open() as f:
         with_defaults = yaml.load(f, Loader=yaml.FullLoader)
     with_defaults.update(parameters)
-    (no_sweep if sweep_id is None else train)(**with_defaults, logger=logger)
+    (no_sweep if sweep_id is None else train)(
+        **with_defaults, disable_jit=False, run_logger=logger
+    )
 
 
 def trainable(config: dict):
@@ -132,27 +136,28 @@ def sweep(
     **kwargs,
 ):
     with config_path.open() as f:
-        partial_config = yaml.load(f, Loader=yaml.FullLoader)
-    config: "dict[str, Any]" = dict(
-        name=name,
-        repo=Repo("."),
-        **kwargs,
-        **{
-            k: (tune.choice(v) if random_search else tune.grid_search(v))
-            if isinstance(v, list)
-            else v
-            for k, v in partial_config.items()
-        },
-    )
+        config = yaml.load(f, Loader=yaml.FullLoader)
     assert GRAPHQL_ENDPOINT is not None
     sweep_id = create_sweep(
-        config=config_path,
+        config=config,
         graphql_endpoint=GRAPHQL_ENDPOINT,
         log_level="INFO",
         name=name,
         project=None,
     )
-    config.update(sweep_id=sweep_id)
+    config: "dict[str, Any]" = dict(
+        log_level="INFO",
+        name=name,
+        repo=Repo("."),
+        sweep_id=sweep_id,
+        **kwargs,
+        **{
+            k: (tune.choice(v) if random_search else tune.grid_search(v))
+            if isinstance(v, list)
+            else v
+            for k, v in config.items()
+        },
+    )
     ray.init()
     analysis = tune.run(
         trainable, config=config, resources_per_trial=dict(cpu=4, gpu=1)
