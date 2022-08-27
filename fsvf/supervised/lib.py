@@ -141,9 +141,8 @@ def compute_metrics(logits, labels, weights):
     loss, weight_sum = compute_weighted_cross_entropy(logits, labels, weights)
     acc, _ = compute_weighted_accuracy(logits, labels, weights)
     metrics = {
-        "loss": loss,
-        "accuracy": acc,
-        "denominator": weight_sum,
+        "loss": loss / weight_sum,
+        "accuracy": acc / weight_sum,
     }
     metrics = np.sum(metrics, -1)
     return metrics

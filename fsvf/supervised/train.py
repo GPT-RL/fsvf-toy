@@ -181,11 +181,7 @@ def train(
         if (step + 1) % eval_frequency == 0:
             metrics = common_utils.get_metrics(train_metrics)
             lr = metrics.pop("learning_rate").mean()
-            metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics)
-            denominator = metrics_sums.pop("denominator")
-            summary = jax.tree_util.tree_map(
-                lambda x: x / denominator, metrics_sums
-            )  # pylint: disable=cell-var-from-loop
+            summary = jax.tree_util.tree_map(jnp.mean, metrics)
             summary["learning_rate"] = lr
             if jax.process_index() == 0:
                 steps_per_sec = eval_frequency / (time.time() - tick)
@@ -221,12 +217,7 @@ def train(
 
                 eval_metrics.append(metrics)
             eval_metrics = common_utils.get_metrics(eval_metrics)
-            eval_metrics_sums = jax.tree_util.tree_map(jnp.sum, eval_metrics)
-            eval_denominator = eval_metrics_sums.pop("denominator")
-            eval_summary = jax.tree_util.tree_map(
-                lambda x: x / eval_denominator,  # pylint: disable=cell-var-from-loop
-                eval_metrics_sums,
-            )
+            eval_summary = jax.tree_util.tree_map(jnp.mean, eval_metrics)
 
             if best_dev_score < eval_summary["accuracy"]:
                 best_dev_score = eval_summary["accuracy"]
