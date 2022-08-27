@@ -114,7 +114,7 @@ def train(
         bucket_size=config.max_len,
     )
     train_iter = tfds.as_numpy(train_ds)
-    eval_ds = input_pipeline.sentence_dataset_dict(
+    ds_eval = input_pipeline.sentence_dataset_dict(
         dev,
         vocabs,
         attributes_input,
@@ -179,59 +179,40 @@ def train(
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
-            metrics = common_utils.get_metrics(train_metrics)
-            lr = metrics.pop("learning_rate").mean()
-            summary = jax.tree_util.tree_map(jnp.mean, metrics)
-            summary["learning_rate"] = lr
-            if jax.process_index() == 0:
-                steps_per_sec = eval_frequency / (time.time() - tick)
-                log = {
-                    "run ID": run_logger.run_id,
-                    "steps per second": steps_per_sec,
-                    "step": step,
-                }
-                console.log(log)
-                if run_logger.run_id is not None:
-                    run_logger.log(**log)
-
-            train_metrics = []  # reset metric accumulation for next evaluation cycle.
-
             eval_metrics = []
-            eval_iter = iter(eval_ds)
-            # eval_iter = iter(ds["test"])
 
-            for eval_batch in eval_iter:
-                eval_batch = jax.tree_util.tree_map(
-                    lambda x: x._numpy(), eval_batch
-                )  # pylint: disable=protected-access
-                # Handle final odd-sized batch by padding instead of dropping it.
-                cur_pred_batch_size = eval_batch["inputs"].shape[0]
-                if cur_pred_batch_size != batch_size:
-                    # pad up to batch size
-                    eval_batch = jax.tree_util.tree_map(
-                        lambda x: pad_examples(x, batch_size), eval_batch
+            with timer("Evaluating..."):
+                for eval_batch in ds_eval:
+                    eval_batch = jax.tree_util.tree_map(lambda x: x.numpy(), eval_batch)
+                    cur_pred_batch_size = eval_batch["inputs"].shape[0]
+                    if cur_pred_batch_size != batch_size:
+                        # pad up to batch size
+                        eval_batch = jax.tree_util.tree_map(
+                            lambda x: pad_examples(x, batch_size), eval_batch
+                        )
+                    assert (
+                        flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size
                     )
-                eval_batch = common_utils.shard(eval_batch)
-
-                metrics = p_eval_step(state.params, eval_batch)
-
-                eval_metrics.append(metrics)
-            eval_metrics = common_utils.get_metrics(eval_metrics)
-            eval_summary = jax.tree_util.tree_map(jnp.mean, eval_metrics)
-
-            if best_dev_score < eval_summary["accuracy"]:
-                best_dev_score = eval_summary["accuracy"]
+                    eval_batch = common_utils.shard(eval_batch)
+                    metrics = p_eval_step(state.params, eval_batch)
+                    eval_metrics.append({f"test {k}": v for k, v in metrics.items()})
+            eval_summary = process_metrics(eval_metrics)
+            train_summary = process_metrics(train_metrics)
+            train_metrics = []
+            if best_dev_score < eval_summary["test accuracy"]:
+                best_dev_score = eval_summary["test accuracy"]
                 # TODO: save model.
             eval_summary["best dev score"] = best_dev_score
             if jax.process_index() == 0:
-                log = {k: v.to_py().item() for k, v in eval_summary.items()}
-                log.update(
-                    {
-                        "run ID": run_logger.run_id,
-                        "step": step,
-                        "hours": (time.time() - tick) / 3600,
-                    }
-                )
+                steps_per_sec = step / (time.time() - tick)
+                log = {
+                    "run ID": run_logger.run_id,
+                    "hours": (time.time() - tick) / 3600,
+                    "step": step,
+                    "steps per second": steps_per_sec,
+                    **eval_summary,
+                    **train_summary,
+                }
                 console.log(log)
                 if run_logger.run_id is not None:
                     run_logger.log(**log)

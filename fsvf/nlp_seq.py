@@ -99,8 +99,15 @@ def _log(
     assert visualizer_url is not None, "VISUALIZER_URL must be set"
 
     def xy():
-        yield "hours", "accuracy"
-        for y in ["accuracy", "loss", "best dev score", "steps per second"]:
+        yield "hours", "test accuracy"
+        for y in [
+            "test accuracy",
+            "test loss",
+            "accuracy",
+            "loss",
+            "best dev score",
+            "steps per second",
+        ]:
             yield "step", y
 
     charts = [
