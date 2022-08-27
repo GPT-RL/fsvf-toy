@@ -111,6 +111,44 @@ def compute_weighted_cross_entropy(logits, targets, weights=None):
     return loss.sum(), normalizing_factor
 
 
+def compute_weighted_accuracy(logits, targets, weights=None):
+    """Compute weighted accuracy for log probs and targets.
+
+    Args:
+     logits: [batch, length, num_classes] float array.
+     targets: categorical targets [batch, length] int array.
+     weights: None or array of shape [batch x length]
+
+    Returns:
+      Tuple of scalar accuracy and batch normalizing factor.
+    """
+    if logits.ndim != targets.ndim + 1:
+        raise ValueError(
+            "Incorrect shapes. Got shape %s logits and %s targets"
+            % (str(logits.shape), str(targets.shape))
+        )
+    loss = jnp.equal(jnp.argmax(logits, axis=-1), targets)
+    normalizing_factor = np.prod(logits.shape[:-1])
+    if weights is not None:
+        loss = loss * weights
+        normalizing_factor = weights.sum()
+
+    return loss.sum(), normalizing_factor
+
+
+def compute_metrics(logits, labels, weights):
+    """Compute summary metrics."""
+    loss, weight_sum = compute_weighted_cross_entropy(logits, labels, weights)
+    acc, _ = compute_weighted_accuracy(logits, labels, weights)
+    metrics = {
+        "loss": loss,
+        "accuracy": acc,
+        "denominator": weight_sum,
+    }
+    metrics = np.sum(metrics, -1)
+    return metrics
+
+
 def compute_loss(estimate, targets):
     return jnp.mean(jnp.square(estimate - targets))
 
