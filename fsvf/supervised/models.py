@@ -40,7 +40,7 @@ class TransformerConfig:
     dtype: Any = jnp.float32
     emb_dim: int = 512
     kernel_init: Callable = nn.initializers.xavier_uniform()
-    max_len: int = 2048
+    max_len: int = 256
     mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
@@ -198,6 +198,8 @@ class Transformer(nn.Module):
     """Transformer Model for sequence tagging."""
 
     config: TransformerConfig
+    dropout_rate: float
+    num_actions: int
 
     @nn.compact
     def __call__(self, *, inputs, train):
@@ -219,7 +221,7 @@ class Transformer(nn.Module):
         x = nn.Embed(
             num_embeddings=config.vocab_size, features=config.emb_dim, name="embed"
         )(x)
-        x = nn.Dropout(rate=config.dropout_rate)(x, deterministic=not train)
+        x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
 
         for _ in range(config.num_layers):

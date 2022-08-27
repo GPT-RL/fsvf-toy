@@ -41,7 +41,6 @@ def train(
     learning_rate: float,
     log_level: str,
     max_dataset_step: int,
-    max_len: int,
     num_actions: int,
     num_train_steps: int,
     run_logger: RunLogger,
@@ -103,7 +102,6 @@ def train(
     config = TransformerConfig(
         vocab_size=len(vocabs["forms"]),
         output_vocab_size=len(vocabs["xpos"]),
-        max_len=max_len,
     )
     attributes_input = [input_pipeline.CoNLLAttributes.FORM]
     attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
@@ -115,7 +113,7 @@ def train(
         batch_size=batch_size,
         bucket_size=config.max_len,
     )
-    train_iter = iter(tfds.as_numpy(train_ds))
+    train_iter = tfds.as_numpy(train_ds)
     eval_ds = input_pipeline.sentence_dataset_dict(
         dev,
         vocabs,
@@ -125,8 +123,10 @@ def train(
         bucket_size=config.max_len,
         repeat=1,
     )
-    init_batch = flow(train_iter, iter, next, lambda x: x["inputs"])
-    model = models.Transformer(config)
+    init_batch = flow(train_iter, iter, next)
+    model = models.Transformer(
+        config=config, dropout_rate=dropout_rate, num_actions=num_actions
+    )
 
     rng = random.PRNGKey(seed)
     rng, init_rng = random.split(rng)
@@ -137,7 +137,7 @@ def train(
         return model.init(init_rng, inputs=init_batch, train=False)
 
     with timer("Initializing variables..."):
-        init_variables = initialize_variables(init_rng, init_batch)
+        init_variables = initialize_variables(init_rng, init_batch["inputs"])
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
@@ -157,30 +157,31 @@ def train(
         donate_argnums=(0,),
     )
 
-    def eval_step(params, batch):
-        """Calculate evaluation metrics on a batch."""
-        inputs, targets = batch["inputs"], batch["targets"]
-        weights = jnp.where(targets > 0, 1.0, 0.0)
-        logits = model.apply({"params": params}, inputs=inputs, train=False)
-        return compute_metrics(logits, targets, weights)
+    p_eval_step = jax.pmap(partial(eval_step, model=model), axis_name="batch")
 
-    p_eval_step = jax.pmap(eval_step, axis_name="batch")
+    process_metrics = pipe(
+        common_utils.get_metrics,
+        partial(jax.tree_util.tree_map, pipe(jnp.mean, lambda x: x.item())),
+    )
 
     # We init the first set of dropout PRNG keys, but update it afterwards inside
     # the main pmap'd training update for performance.
     dropout_rngs = random.split(rng, jax.local_device_count())
-    metrics_all = []
-    tick = time.time()
     best_dev_score = 0
-    for step, batch in zip(range(num_train_steps), train_iter):
+    init_batch = common_utils.shard(init_batch)
+    with timer("Jitting train step..."):
+        state, _ = p_train_step(state, init_batch, dropout_rng=dropout_rngs)
+    logger.info("Training...")
+    train_metrics = []
+    tick = time.time()
+    for step, batch in zip(range(num_train_steps), train_iter):  # type: ignore
         batch = common_utils.shard(batch)
-
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
-        metrics_all.append(metrics)
+        train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
-            metrics_all = common_utils.get_metrics(metrics_all)
-            lr = metrics_all.pop("learning_rate").mean()
-            metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics_all)
+            metrics = common_utils.get_metrics(train_metrics)
+            lr = metrics.pop("learning_rate").mean()
+            metrics_sums = jax.tree_util.tree_map(jnp.sum, metrics)
             denominator = metrics_sums.pop("denominator")
             summary = jax.tree_util.tree_map(
                 lambda x: x / denominator, metrics_sums
@@ -197,7 +198,7 @@ def train(
                 if run_logger.run_id is not None:
                     run_logger.log(**log)
 
-            metrics_all = []  # reset metric accumulation for next evaluation cycle.
+            train_metrics = []  # reset metric accumulation for next evaluation cycle.
 
             eval_metrics = []
             eval_iter = iter(eval_ds)
