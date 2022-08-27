@@ -131,7 +131,7 @@ def train(
         donate_argnums=(0,),
     )
 
-    p_eval_step = jax.pmap(partial(eval_step, model=model), in_axes=0)
+    p_eval_step = jax.pmap(partial(eval_step, model=model), axis_name="batch")
 
     process_metrics = pipe(
         common_utils.get_metrics,
