@@ -32,8 +32,8 @@ from tensorflow.python.ops.numpy_ops import np_config
 
 def train(
     batch_size: int,
-    disable_jit: bool,
     data_dir: str,
+    disable_jit: bool,
     dev: str,
     download_dir: str,
     dropout_rate: float,
@@ -47,6 +47,7 @@ def train(
     run_logger: RunLogger,
     eval_frequency: int,
     seed: int,
+    steps_per_prompt: int,
     test_size: int,
     train: str,
 ):
@@ -61,11 +62,43 @@ def train(
 
     # Make sure tf does not allocate gpu memory.
     tf.config.experimental.set_visible_devices([], "GPU")
-    console = Console()
+    np_config.enable_numpy_behavior()
+
     if batch_size % jax.device_count() > 0:
         raise ValueError("Batch size must be divisible by the number of devices")
     vocabs = input_pipeline.create_vocabs(train)
 
+    console = Console()
+
+    @contextmanager
+    def timer(msg: str, stacklevel=3):
+        logger.info(msg, stacklevel=stacklevel)
+        tick = time.time()
+        yield
+        logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
+
+    with timer("Loading data..."):
+        builder_kwargs = dict(
+            context_size=steps_per_prompt,
+            gamma=gamma,
+            max_checkpoint=max_dataset_step,
+            test_size=test_size,
+        )
+        data_dir = flow(
+            data_dir,
+            Path,
+            lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
+            str,
+        )
+        kwargs = dict(name="my_dataset", data_dir=str(data_dir))
+        download_and_prepare_kwargs = dict(download_dir=download_dir)
+        builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
+        builder.download_and_prepare(**download_and_prepare_kwargs)
+        ds = tfds.load(
+            **kwargs,
+            builder_kwargs=builder_kwargs,
+            download_and_prepare_kwargs=download_and_prepare_kwargs,
+        )
     # create the training and development dataset
     config = TransformerConfig(
         vocab_size=len(vocabs["forms"]),
@@ -74,23 +107,6 @@ def train(
     )
     attributes_input = [input_pipeline.CoNLLAttributes.FORM]
     attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
-    # ds_name = "my_dataset"
-    # builder_kwargs = dict(
-    #     context_size=config.max_len,
-    #     gamma=gamma,
-    #     max_checkpoint=max_dataset_step,
-    #     test_size=test_size,
-    # )
-    # download_and_prepare_kwargs = dict(download_dir=download_dir)
-    # tfds.builder(ds_name, data_dir=data_dir, **builder_kwargs).download_and_prepare(
-    #     **download_and_prepare_kwargs
-    # )
-    # ds = tfds.load(
-    #     ds_name,
-    #     builder_kwargs=builder_kwargs,
-    #     download_and_prepare_kwargs=download_and_prepare_kwargs,
-    # )
-    # train_iter = iter(ds["train"])
     train_ds = input_pipeline.sentence_dataset_dict(
         train,
         vocabs,
@@ -112,7 +128,6 @@ def train(
     model = models.Transformer(config)
 
     rng = random.PRNGKey(seed)
-    config.max_len
     rng, init_rng = random.split(rng)
 
     # call a jitted initialization function to get the initial parameter tree
@@ -122,7 +137,8 @@ def train(
         init_variables = model.init(init_rng, inputs=init_batch, train=False)
         return init_variables
 
-    init_variables = initialize_variables(init_rng)
+    with timer("Initializing variables..."):
+        init_variables = initialize_variables(init_rng)
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
@@ -140,7 +156,7 @@ def train(
         partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         axis_name="batch",
         donate_argnums=(0,),
-    )  # pytype: disable=wrong-arg-types
+    )
 
     def eval_step(params, batch):
         """Calculate evaluation metrics on a batch."""
