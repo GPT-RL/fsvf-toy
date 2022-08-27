@@ -115,7 +115,7 @@ def train(
         batch_size=batch_size,
         bucket_size=config.max_len,
     )
-    train_iter = iter(train_ds)
+    train_iter = iter(tfds.as_numpy(train_ds))
     eval_ds = input_pipeline.sentence_dataset_dict(
         dev,
         vocabs,
@@ -125,6 +125,7 @@ def train(
         bucket_size=config.max_len,
         repeat=1,
     )
+    init_batch = flow(train_iter, iter, next, lambda x: x["inputs"])
     model = models.Transformer(config)
 
     rng = random.PRNGKey(seed)
@@ -132,13 +133,11 @@ def train(
 
     # call a jitted initialization function to get the initial parameter tree
     @jax.jit
-    def initialize_variables(init_rng):
-        init_batch = jnp.ones((config.max_len, 1), jnp.float32)  # type: ignore
-        init_variables = model.init(init_rng, inputs=init_batch, train=False)
-        return init_variables
+    def initialize_variables(init_rng, init_batch):
+        return model.init(init_rng, inputs=init_batch, train=False)
 
     with timer("Initializing variables..."):
-        init_variables = initialize_variables(init_rng)
+        init_variables = initialize_variables(init_rng, init_batch)
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
@@ -174,9 +173,7 @@ def train(
     tick = time.time()
     best_dev_score = 0
     for step, batch in zip(range(num_train_steps), train_iter):
-        batch = common_utils.shard(
-            jax.tree_util.tree_map(lambda x: x._numpy(), batch)
-        )  # pylint: disable=protected-access
+        batch = common_utils.shard(batch)
 
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         metrics_all.append(metrics)
