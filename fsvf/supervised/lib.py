@@ -23,7 +23,6 @@ import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
-from rich.console import Console
 
 
 def create_learning_rate_scheduler(
@@ -148,6 +147,25 @@ def compute_metrics(logits, labels, weights):
     }
     metrics = np.sum(metrics, -1)
     return metrics
+
+
+def compute_loss(estimate, targets):
+    return jnp.mean(jnp.square(estimate - targets))
+
+
+def compute_error(estimate, targets):
+    return jnp.mean(jnp.abs(estimate - targets))
+
+
+def eval_step(params, batch, model):
+    """Calculate evaluation metrics on a batch."""
+    targets = batch["value"][:, -1]
+    output = model.apply({"params": params}, inputs=batch, train=False)
+    estimate = output[:, -1, 0]
+    return {
+        "loss": compute_loss(estimate, targets),
+        "error": compute_error(estimate, targets),
+    }
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
