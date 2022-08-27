@@ -127,7 +127,7 @@ def train(
 
     p_train_step = jax.pmap(
         partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
-        in_axes=0,
+        axis_name="batch",
         donate_argnums=(0,),
     )
 
