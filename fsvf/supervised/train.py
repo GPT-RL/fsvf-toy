@@ -153,9 +153,6 @@ def train(
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
-            if jax.process_index() == 0:
-                pass
-
             eval_metrics = []
             ds_eval = ds["test"]  # type: ignore
             eval_iter = ds_eval.shuffle(len(ds_eval)).batch(
