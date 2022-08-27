@@ -92,14 +92,13 @@ class AddPositionEmbs(nn.Module):
         Returns:
           output: `(bs, timesteps, in_dim)`
         """
-        config = self.config
         # inputs.shape is (batch_size, seq_len, emb_dim)
         assert inputs.ndim == 3, (
             "Number of dimensions should be 3," " but it is: %d" % inputs.ndim
         )
         length = inputs.shape[1]
-        pos_emb_shape = (1, config.max_len, inputs.shape[-1])
-        pos_embedding = sinusoidal_init(max_len=config.max_len)(
+        pos_emb_shape = (1, *inputs.shape[-2:])
+        pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
             None, pos_emb_shape, None
         )
         # pos_embedding = self.param(
@@ -233,15 +232,10 @@ class Transformer(nn.Module):
         )
         value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
         x = jnp.concatenate([state, action, value], axis=-2)
-        _, _, *x_shape = x.shape  # type: ignore
-        initializer = nn.initializers.normal()  # type: ignore
-        position_embedding = self.param(
-            "position_embedding", initializer, (1, *x_shape)
-        )
-
+        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
-        x = x + position_embedding
-        x = x.reshape(b, -1, self.config.emb_dim)
+        x = AddPositionEmbs(config=self.config)(x)
+
         x = x[:, :-1]  # exclude target
 
         for _ in range(self.config.num_layers):
