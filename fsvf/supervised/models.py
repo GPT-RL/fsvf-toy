@@ -226,7 +226,7 @@ class Transformer(nn.Module):
             nn.Embed(
                 num_embeddings=self.num_actions,
                 features=self.config.emb_dim,
-                dtype=jnp.int32,
+                dtype=jnp.float32,
             ),
             partial(jnp.reshape, newshape=(b, l, 1, self.config.emb_dim)),
         )
