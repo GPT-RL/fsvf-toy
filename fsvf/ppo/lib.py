@@ -307,6 +307,8 @@ def train(
     # Linearly decay learning rate and clipping parameter to zero during
     # the training.
     decaying_lr_and_clip_param: bool,
+    # Whether to disable the jit
+    disable_jit: bool,
     # If not none, path to save experience from test rollouts.
     download_dir: Optional[str],
     # Weight of entropy bonus in the total loss.
@@ -354,6 +356,11 @@ def train(
     Returns:
       optimizer: the trained optimizer
     """
+    if disable_jit:
+        from jax._src.config import config
+
+        config.update("jax_disable_jit", True)
+
     tf.config.experimental.set_visible_devices([], "GPU")
     console = Console()
     if render:
@@ -446,7 +453,9 @@ def train(
                             console.log(f"Saved experience to {f.name}")
                             i += 1
             frames = step * num_agents * actor_steps
-            log = dict(step=frames, hours=(time.time() - start_time) / 3600) | {
+            log = dict(
+                frames=frames, hours=(time.time() - start_time) / 3600, steps=step
+            ) | {
                 "return": test_return,
                 "run ID": run_logger.run_id,
                 "save count": save_count,

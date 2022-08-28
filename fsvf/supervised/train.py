@@ -17,12 +17,8 @@ from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import input_pipeline, models
-from supervised.lib import (
-    create_learning_rate_scheduler,
-    eval_step,
-    pad_examples,
-    train_step,
-)
+from supervised.input_pipeline import trajectory_dataset
+from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
 from supervised.models import TransformerConfig
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
@@ -52,6 +48,18 @@ def train(
         from jax._src.config import config
 
         config.update("jax_disable_jit", True)
+
+    def pmap(
+        fun,
+        *args,
+        donate_argnums=(),
+        **kwargs,
+    ):
+        return (
+            jax.vmap(fun, *args, **kwargs)
+            if disable_jit
+            else jax.pmap(fun, *args, donate_argnums=donate_argnums, **kwargs)
+        )
 
     logging.basicConfig(datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
     logger = logging.getLogger(__name__)
@@ -90,7 +98,7 @@ def train(
         bucket_size=config.max_len,
     )
     train_iter = tfds.as_numpy(train_ds)
-    ds_eval = input_pipeline.sentence_dataset_dict(
+    eval_iter = input_pipeline.sentence_dataset_dict(
         dev,
         vocabs,
         attributes_input,
@@ -127,13 +135,13 @@ def train(
     # Replicate optimizer.
     state = jax_utils.replicate(state)
 
-    p_train_step = jax.pmap(
+    p_train_step = pmap(
         partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         axis_name="batch",
         donate_argnums=(0,),
     )
 
-    p_eval_step = jax.pmap(partial(eval_step, model=model), axis_name="batch")
+    p_eval_step = pmap(partial(eval_step, model=model), axis_name="batch")
 
     process_metrics = pipe(
         common_utils.get_metrics,
@@ -158,14 +166,8 @@ def train(
             eval_metrics = []
 
             with timer("Evaluating..."):
-                for eval_batch in ds_eval:
+                for eval_batch in eval_iter:  # type: ignore
                     eval_batch = jax.tree_util.tree_map(lambda x: x.numpy(), eval_batch)
-                    cur_pred_batch_size = eval_batch["inputs"].shape[0]
-                    if cur_pred_batch_size != batch_size:
-                        # pad up to batch size
-                        eval_batch = jax.tree_util.tree_map(
-                            lambda x: pad_examples(x, batch_size), eval_batch
-                        )
                     assert (
                         flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size
                     )

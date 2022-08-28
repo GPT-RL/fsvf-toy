@@ -17,8 +17,12 @@
 import codecs
 import collections
 import enum
+from pathlib import Path
+from typing import Optional
 
 import tensorflow.compat.v2 as tf  # pytype: disable=import-error
+import tensorflow_datasets as tfds
+from returns.pipeline import flow
 
 # Values for padding, unknown words and a root.
 PAD = "<p>"
@@ -252,7 +256,68 @@ def sentence_dataset_dict(
 
     # static padding up to bucket size.
     padded_shapes = {k: [bucket_size] for k in data_keys}
-    dataset = dataset.padded_batch(batch_size=batch_size, padded_shapes=(padded_shapes))
+    dataset = dataset.padded_batch(
+        batch_size=batch_size, padded_shapes=(padded_shapes), drop_remainder=True
+    )
 
     dataset = dataset.prefetch(prefetch_size)
     return dataset
+
+
+def trajectory_dataset(
+    batch_size: int,
+    data_dir: str,
+    download_dir: str,
+    gamma: float,
+    max_dataset_step: int,
+    repeat: Optional[int],
+    test_size: int,
+    split: str,
+    steps_per_prompt: int,
+    prefetch_size=tf.data.experimental.AUTOTUNE,
+):
+    """Combines sentences into a dataset of padded batches.
+
+    Args:
+      filename: file name of a corpus.
+      vocabs: dictionary of dictionaries to map from strings to ids.
+      attributes_input: attributes for the input.
+      attributes_target: target attributes empty targets is not inclueded.
+      batch_size: the size of a batch.
+      bucket_size: the size of a bucket.
+      repeat: number of times the dataset is repeated.
+      prefetch_size: prefetch size of the data.
+
+    Returns:
+      Returns dataset as dictionary containing the data as key value pairs.
+    """
+    builder_kwargs = dict(
+        context_size=steps_per_prompt,
+        gamma=gamma,
+        max_checkpoint=max_dataset_step,
+        test_size=test_size,
+    )
+    data_dir = flow(
+        data_dir,
+        Path,
+        lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
+        str,
+    )
+    kwargs = dict(name="my_dataset", data_dir=str(data_dir))
+    download_and_prepare_kwargs = dict(download_dir=download_dir)
+    builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
+    builder.download_and_prepare(**download_and_prepare_kwargs)
+    dataset = tfds.load(
+        **kwargs,
+        builder_kwargs=builder_kwargs,
+        download_and_prepare_kwargs=download_and_prepare_kwargs,
+    )
+    dataset = dataset[split]  # type: ignore
+
+    return tfds.as_numpy(
+        dataset.shuffle(len(dataset))
+        .cache()  # cache the dataset in memory and repeat.
+        .repeat(repeat)
+        .batch(batch_size, drop_remainder=True)
+        .prefetch(prefetch_size)
+    )
