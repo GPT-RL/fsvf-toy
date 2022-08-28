@@ -126,7 +126,7 @@ def compute_accuracy(logits, targets):
     return loss.mean()
 
 
-def compute_metrics(logits, labels, weights):
+def compute_metrics(logits, labels):
     """Compute summary metrics."""
     loss = compute_cross_entropy(logits, labels)
     acc = compute_accuracy(logits, labels)
@@ -145,29 +145,31 @@ def compute_error(estimate, targets):
 
 def eval_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
-    train_keys = ["action", "action"]
-    (inputs, targets) = (batch.get(k, None) for k in train_keys)
-    output = model.apply({"params": params}, inputs=inputs, train=False)
+    output = model.apply({"params": params}, inputs=batch, train=False)
+    targets = get_targets(batch)
     return {
         "loss": compute_cross_entropy(output, targets),
         "accuracy": compute_accuracy(output, targets),
     }
 
 
+def get_targets(batch):
+    return batch["action"]
+
+
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
-    train_keys = ["action", "action"]
-    (inputs, targets) = (batch.get(k, None) for k in train_keys)
     dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
     def loss_fn(params):
         """loss function used for training."""
         output = model.apply(
             {"params": params},
-            inputs=inputs,
+            inputs=batch,
             train=True,
             rngs={"dropout": dropout_rng},
         )
+        targets = get_targets(batch)
         return compute_cross_entropy(output, targets), compute_accuracy(output, targets)
 
     lr = learning_rate_fn(state.step)

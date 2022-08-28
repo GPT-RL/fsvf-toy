@@ -105,7 +105,7 @@ def train(
         return model.init(init_rng, inputs=init_batch, train=False)
 
     with timer("Initializing variables..."):
-        init_variables = initialize_variables(init_rng, init_batch["action"])
+        init_variables = initialize_variables(init_rng, init_batch)
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 

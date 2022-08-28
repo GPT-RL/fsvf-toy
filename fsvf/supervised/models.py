@@ -35,7 +35,6 @@ class TransformerConfig:
     dtype: Any = jnp.float32
     emb_dim: int = 512
     kernel_init: Callable = nn.initializers.xavier_uniform()
-    max_len: int = 256
     mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
@@ -90,14 +89,13 @@ class AddPositionEmbs(nn.Module):
         Returns:
           output: `(bs, timesteps, in_dim)`
         """
-        config = self.config
         # inputs.shape is (batch_size, seq_len, emb_dim)
         assert inputs.ndim == 3, (
             "Number of dimensions should be 3," " but it is: %d" % inputs.ndim
         )
         length = inputs.shape[1]
-        pos_emb_shape = (1, config.max_len, inputs.shape[-1])
-        pos_embedding = sinusoidal_init(max_len=config.max_len)(
+        pos_emb_shape = (1, *inputs.shape[-2:])
+        pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
             None, pos_emb_shape, None
         )
         # pos_embedding = self.param(
@@ -208,6 +206,7 @@ class Transformer(nn.Module):
           output of a transformer encoder.
 
         """
+        inputs = inputs["action"]
         assert inputs.ndim == 2  # (batch, len)
 
         config = self.config
