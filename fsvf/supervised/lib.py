@@ -23,6 +23,8 @@ import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
+from returns.curry import partial
+from returns.pipeline import flow
 
 
 def create_learning_rate_scheduler(
@@ -136,11 +138,23 @@ def compute_metrics(logits, labels):
 
 
 def compute_loss(estimate, targets):
-    return jnp.mean(jnp.square(estimate - targets))
+    return flow(
+        estimate,
+        partial(jnp.squeeze, axis=-1),
+        lambda estimate: estimate - targets,
+        jnp.square,
+        jnp.mean,
+    )
 
 
 def compute_error(estimate, targets):
-    return jnp.mean(jnp.abs(estimate - targets))
+    return flow(
+        estimate,
+        partial(jnp.squeeze, axis=-1),
+        lambda estimate: estimate - targets,
+        jnp.abs,
+        jnp.mean,
+    )
 
 
 def eval_step(params, batch, model):
@@ -154,7 +168,7 @@ def eval_step(params, batch, model):
 
 
 def get_targets(batch):
-    return batch["action"]
+    return batch["value"]
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
