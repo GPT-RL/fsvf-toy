@@ -85,7 +85,7 @@ def create_learning_rate_scheduler(
     return step_fn
 
 
-def compute_weighted_cross_entropy(logits, targets, weights=None):
+def compute_cross_entropy(logits, targets):
     """Compute weighted cross entropy and entropy for log probs and targets.
 
     Args:
@@ -103,15 +103,10 @@ def compute_weighted_cross_entropy(logits, targets, weights=None):
         )
     onehot_targets = common_utils.onehot(targets, logits.shape[-1])
     loss = -jnp.sum(onehot_targets * nn.log_softmax(logits), axis=-1)
-    normalizing_factor = onehot_targets.sum()
-    if weights is not None:
-        loss = loss * weights
-        normalizing_factor = weights.sum()
-
-    return loss.sum(), normalizing_factor
+    return loss.mean()
 
 
-def compute_weighted_accuracy(logits, targets, weights=None):
+def compute_accuracy(logits, targets):
     """Compute weighted accuracy for log probs and targets.
 
     Args:
@@ -128,24 +123,15 @@ def compute_weighted_accuracy(logits, targets, weights=None):
             % (str(logits.shape), str(targets.shape))
         )
     loss = jnp.equal(jnp.argmax(logits, axis=-1), targets)
-    normalizing_factor = np.prod(logits.shape[:-1])
-    if weights is not None:
-        loss = loss * weights
-        normalizing_factor = weights.sum()
-
-    return loss.sum(), normalizing_factor
+    return loss.mean()
 
 
-def compute_metrics(logits, labels, weights):
+def compute_metrics(logits, labels):
     """Compute summary metrics."""
-    loss, weight_sum = compute_weighted_cross_entropy(logits, labels, weights)
-    acc, _ = compute_weighted_accuracy(logits, labels, weights)
-    metrics = {
-        "loss": loss,
-        "accuracy": acc,
-        "denominator": weight_sum,
-    }
-    metrics = np.sum(metrics, -1)
+    loss = compute_cross_entropy(logits, labels)
+    acc = compute_accuracy(logits, labels)
+    metrics = {"loss": loss, "accuracy": acc}
+    metrics = np.sum(metrics, -1)  # type: ignore
     return metrics
 
 
