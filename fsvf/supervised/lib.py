@@ -145,18 +145,20 @@ def compute_error(estimate, targets):
 
 def eval_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
-    targets = batch["value"][:, -1]
     output = model.apply({"params": params}, inputs=batch, train=False)
-    estimate = output[:, -1, 0]
+    targets = get_targets(batch)
     return {
-        "loss": compute_loss(estimate, targets),
-        "error": compute_error(estimate, targets),
+        "loss": compute_loss(output, targets),
+        "error": compute_error(output, targets),
     }
+
+
+def get_targets(batch):
+    return batch["action"]
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
-    targets = batch["value"][:, -1]
     dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
     def loss_fn(params):
@@ -167,8 +169,8 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
             train=True,
             rngs={"dropout": dropout_rng},
         )
-        estimate = output[:, -1, 0]
-        return compute_loss(estimate, targets), compute_error(estimate, targets)
+        targets = get_targets(batch)
+        return compute_loss(output, targets), compute_error(output, targets)
 
     lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)

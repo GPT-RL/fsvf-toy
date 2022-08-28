@@ -37,7 +37,7 @@ class TransformerConfig:
     dropout_rate: float = 0.3
     dtype: Any = jnp.float32
     emb_dim: int = 512
-    kernel_init: Callable = nn.initializers.xavier_uniform()
+    kernel_init: Callable = xavier_uniform
     mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
@@ -99,7 +99,7 @@ class AddPositionEmbs(nn.Module):
         length = inputs.shape[1]
         pos_emb_shape = (1, *inputs.shape[-2:])
         pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
-            None, pos_emb_shape, None
+            None, pos_emb_shape, None  # type: ignore
         )
         # pos_embedding = self.param(
         #     "pos_embedding", config.posemb_init, pos_emb_shape
@@ -209,6 +209,7 @@ class Transformer(nn.Module):
           output of a transformer encoder.
 
         """
+        config = self.config
         inputs = DataPoint(**inputs)
         b, l, *state_shape = inputs.state.shape
         state = flow(
@@ -232,14 +233,12 @@ class Transformer(nn.Module):
         )
         value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
         x = jnp.concatenate([state, action, value], axis=-2)
-        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
+        x = x.reshape(b, l, -1)  # type: ignore
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
-        x = AddPositionEmbs(config=self.config)(x)
+        x = AddPositionEmbs(config)(x)
 
-        x = x[:, :-1]  # exclude target
-
-        for _ in range(self.config.num_layers):
-            x = Encoder1DBlock(self.config)(x, deterministic=not train)
+        for _ in range(config.num_layers):
+            x = Encoder1DBlock(config)(x, deterministic=not train)
 
         x = nn.LayerNorm(dtype=jnp.float32)(x)
         logits = nn.Dense(1)(x)
