@@ -221,6 +221,14 @@ class Transformer(nn.Module):
                 dtype=jnp.float32,
                 padding=0,
             ),
+            nn.relu,
+            nn.Conv(
+                features=self.config.emb_dim,
+                kernel_size=(3, 3),
+                strides=(1, 1),
+                dtype=jnp.float32,
+                padding=0,
+            ),
         ).reshape(b, l, -1, self.config.emb_dim)
         action = flow(
             inputs.action.astype(jnp.int32),
