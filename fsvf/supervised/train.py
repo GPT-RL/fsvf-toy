@@ -45,6 +45,18 @@ def train(
 
         config.update("jax_disable_jit", True)
 
+    def pmap(
+        fun,
+        *args,
+        donate_argnums=(),
+        **kwargs,
+    ):
+        return (
+            jax.vmap(fun, *args, **kwargs)
+            if disable_jit
+            else jax.pmap(fun, *args, donate_argnums=donate_argnums, **kwargs)
+        )
+
     logging.basicConfig(datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level)
@@ -107,13 +119,13 @@ def train(
     # Replicate optimizer.
     state = jax_utils.replicate(state)
 
-    p_train_step = jax.pmap(
+    p_train_step = pmap(
         partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
         axis_name="batch",
         donate_argnums=(0,),
     )
 
-    p_eval_step = jax.pmap(partial(eval_step, model=model), axis_name="batch")
+    p_eval_step = pmap(partial(eval_step, model=model), axis_name="batch")
 
     process_metrics = pipe(
         common_utils.get_metrics,
