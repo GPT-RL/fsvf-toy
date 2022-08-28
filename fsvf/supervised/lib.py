@@ -85,7 +85,7 @@ def create_learning_rate_scheduler(
     return step_fn
 
 
-def compute_weighted_cross_entropy(logits, targets):
+def compute_cross_entropy(logits, targets):
     """Compute weighted cross entropy and entropy for log probs and targets.
 
     Args:
@@ -106,7 +106,7 @@ def compute_weighted_cross_entropy(logits, targets):
     return loss.mean()
 
 
-def compute_weighted_accuracy(logits, targets):
+def compute_accuracy(logits, targets):
     """Compute weighted accuracy for log probs and targets.
 
     Args:
@@ -128,8 +128,8 @@ def compute_weighted_accuracy(logits, targets):
 
 def compute_metrics(logits, labels, weights):
     """Compute summary metrics."""
-    loss = compute_weighted_cross_entropy(logits, labels)
-    acc = compute_weighted_accuracy(logits, labels)
+    loss = compute_cross_entropy(logits, labels)
+    acc = compute_accuracy(logits, labels)
     metrics = {"loss": loss, "accuracy": acc}
     metrics = np.sum(metrics, -1)  # type: ignore
     return metrics
@@ -145,37 +145,37 @@ def compute_error(estimate, targets):
 
 def eval_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
-    inputs, targets = batch["action"], batch["action"]
-    weights = jnp.where(targets > 0, 1.0, 0.0)
-    logits = model.apply({"params": params}, inputs=inputs, train=False)
-    return compute_metrics(logits, targets, weights)
+    train_keys = ["action", "action"]
+    (inputs, targets) = (batch.get(k, None) for k in train_keys)
+    output = model.apply({"params": params}, inputs=inputs, train=False)
+    return {
+        "loss": compute_cross_entropy(output, targets),
+        "accuracy": compute_accuracy(output, targets),
+    }
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
     train_keys = ["action", "action"]
     (inputs, targets) = (batch.get(k, None) for k in train_keys)
-
-    weights = jnp.where(targets > 0, 1, 0).astype(jnp.float32)
-
     dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
     def loss_fn(params):
         """loss function used for training."""
-        logits = model.apply(
-            {"params": params}, inputs=inputs, train=True, rngs={"dropout": dropout_rng}
+        output = model.apply(
+            {"params": params},
+            inputs=inputs,
+            train=True,
+            rngs={"dropout": dropout_rng},
         )
-        loss = compute_weighted_cross_entropy(logits, targets)
-        return loss, logits
+        return compute_cross_entropy(output, targets), compute_accuracy(output, targets)
 
     lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (_, logits), grads = grad_fn(state.params)
+    (loss, acc), grads = grad_fn(state.params)
     grads = jax.lax.pmean(grads, "batch")
     new_state = state.apply_gradients(grads=grads)
-    metrics = compute_metrics(logits, targets, weights)
-    metrics["learning_rate"] = lr
-
+    metrics = {"accuracy": acc, "learning rate": lr, "loss": loss}
     return new_state, metrics
 
 
