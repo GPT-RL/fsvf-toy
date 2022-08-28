@@ -242,7 +242,7 @@ class Transformer(nn.Module):
 
         x = nn.LayerNorm(dtype=config.dtype)(x)
         logits = nn.Dense(
-            self.num_actions,
+            4,
             kernel_init=config.kernel_init,
             bias_init=config.bias_init,
         )(x)
