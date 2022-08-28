@@ -142,7 +142,7 @@ def difference(targets: jnp.ndarray):
 
     return pipe(
         # [s1, a1, v1, s2, a2, v2, ...]
-        partial(jnp.pad, pad_width=[(0, 0), (1, 0), (0, 0)]),
+        # partial(jnp.pad, pad_width=[(0, 0), (1, 0), (0, 0)]),
         # [0, s1, a1, v1, s2, a2, v2, ...]
         partial(jnp.reshape, newshape=(b, l, -1)),
         # [[0, v1, v2, ...], [s1, s2, ...], [a1, a2, ...]]
