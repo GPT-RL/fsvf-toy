@@ -26,7 +26,6 @@ def train(
     batch_size: int,
     data_dir: str,
     disable_jit: bool,
-    dev: str,
     download_dir: str,
     dropout_rate: float,
     gamma: float,
@@ -40,7 +39,6 @@ def train(
     seed: int,
     steps_per_prompt: int,
     test_size: int,
-    train: str,
 ):
     if disable_jit:
         from jax._src.config import config
@@ -92,6 +90,7 @@ def train(
             repeat=None,
         )
     init_batch = flow(train_iter, iter, next)
+
     config = models.TransformerConfig()
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions

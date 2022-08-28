@@ -241,10 +241,9 @@ def sentence_dataset_dict(
             data = {"inputs": inputs}
             if attributes_target:
                 data["targets"] = next(target_generator)
-            data["inputs"] = data["targets"]
             yield data
 
-    output_types = {k: tf.int32 for k in data_keys}
+    output_types = {k: tf.float32 for k in data_keys}
     output_shapes = {k: (None,) for k in data_keys}
     dataset = tf.data.Dataset.from_generator(
         generator, output_types=output_types, output_shapes=output_shapes
@@ -256,9 +255,7 @@ def sentence_dataset_dict(
 
     # static padding up to bucket size.
     padded_shapes = {k: [bucket_size] for k in data_keys}
-    dataset = dataset.padded_batch(
-        batch_size=batch_size, padded_shapes=(padded_shapes), drop_remainder=True
-    )
+    dataset = dataset.padded_batch(batch_size=batch_size, padded_shapes=(padded_shapes))
 
     dataset = dataset.prefetch(prefetch_size)
     return dataset

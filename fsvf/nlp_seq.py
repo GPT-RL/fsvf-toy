@@ -20,19 +20,15 @@ def xy():
 
 
 if __name__ == "__main__":
-    dev_path = os.getenv("NLP_SEQ_DEV_PATH")
-    train_path = os.getenv("NLP_SEQ_TRAIN_PATH")
-    assert dev_path is not None
-    assert train_path is not None
-    defaults = dict(log_level="INFO", dev=Path(dev_path), train=Path(train_path))
+    default_log_level = dict(log_level="INFO")
     tree = build_tree(
         config_path=Path("fsvf/supervised/config.yml"),
         defaults_path=Path("fsvf/supervised/default.yml"),
-        log_defaults=dict(**defaults, disable_jit=False),
-        no_log_defaults=defaults,
+        log_defaults=dict(**default_log_level, disable_jit=False),
+        no_log_defaults=default_log_level,
         no_log_parser=flag("disable_jit", default=False),
         run=train,
-        sweep_defaults=dict(**defaults, disable_jit=False),
+        sweep_defaults=dict(**default_log_level, disable_jit=False),
         xy=xy(),
     )
     tree()
