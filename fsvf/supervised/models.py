@@ -37,7 +37,7 @@ class TransformerConfig:
     dropout_rate: float = 0.3
     dtype: Any = jnp.float32
     emb_dim: int = 512
-    kernel_init: Callable = nn.initializers.xavier_uniform()
+    kernel_init: Callable = xavier_uniform
     mlp_dim: int = 2048
     num_heads: int = 8
     num_layers: int = 6
@@ -99,7 +99,7 @@ class AddPositionEmbs(nn.Module):
         length = inputs.shape[1]
         pos_emb_shape = (1, *inputs.shape[-2:])
         pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
-            None, pos_emb_shape, None
+            None, pos_emb_shape, None  # type: ignore
         )
         # pos_embedding = self.param(
         #     "pos_embedding", config.posemb_init, pos_emb_shape
@@ -212,16 +212,16 @@ class Transformer(nn.Module):
         config = self.config
         inputs = DataPoint(**inputs)
         b, l, *state_shape = inputs.state.shape
-        # state = flow(
-        #     inputs.state.reshape(-1, *state_shape),
-        #     nn.Conv(
-        #         features=self.config.emb_dim,
-        #         kernel_size=(3, 3),
-        #         strides=(1, 1),
-        #         dtype=jnp.float32,
-        #         padding=0,
-        #     ),
-        # ).reshape(b, l, -1, self.config.emb_dim)
+        state = flow(
+            inputs.state.reshape(-1, *state_shape),
+            nn.Conv(
+                features=self.config.emb_dim,
+                kernel_size=(3, 3),
+                strides=(1, 1),
+                dtype=jnp.float32,
+                padding=0,
+            ),
+        ).reshape(b, l, -1, self.config.emb_dim)
         action = flow(
             inputs.action.astype(jnp.int32),
             nn.Embed(
@@ -231,10 +231,9 @@ class Transformer(nn.Module):
             ),
             partial(jnp.reshape, newshape=(b, l, 1, self.config.emb_dim)),
         )
-        # value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
-        # x = jnp.concatenate([state, action, value], axis=-2)
-        x = action
-        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
+        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
+        x = jnp.concatenate([state, action, value], axis=-2)
+        x = x.reshape(b, l, -1)  # type: ignore
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
 
