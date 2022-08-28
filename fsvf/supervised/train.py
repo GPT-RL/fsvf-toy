@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import optax
 import supervised.dataset  # noqa: F401
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
@@ -16,10 +15,9 @@ from returns.pipeline import flow, pipe
 from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
-from supervised import input_pipeline, models
+from supervised import models
 from supervised.input_pipeline import trajectory_dataset
 from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
-from supervised.models import TransformerConfig
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 
@@ -71,7 +69,6 @@ def train(
 
     if batch_size % jax.device_count() > 0:
         raise ValueError("Batch size must be divisible by the number of devices")
-    vocabs = input_pipeline.create_vocabs(train)
 
     console = Console()
 
@@ -82,32 +79,20 @@ def train(
         yield
         logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
 
-    # create the training and development dataset
-    config = TransformerConfig(
-        vocab_size=len(vocabs["forms"]),
-        output_vocab_size=len(vocabs["xpos"]),
-    )
-    attributes_input = [input_pipeline.CoNLLAttributes.FORM]
-    attributes_target = [input_pipeline.CoNLLAttributes.XPOS]
-    train_ds = input_pipeline.sentence_dataset_dict(
-        train,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-    )
-    train_iter = tfds.as_numpy(train_ds)
-    eval_iter = input_pipeline.sentence_dataset_dict(
-        dev,
-        vocabs,
-        attributes_input,
-        attributes_target,
-        batch_size=batch_size,
-        bucket_size=config.max_len,
-        repeat=1,
-    )
+    with timer("Loading data..."):
+        train_iter = trajectory_dataset(
+            batch_size=batch_size,
+            data_dir=data_dir,
+            download_dir=download_dir,
+            gamma=gamma,
+            max_dataset_step=max_dataset_step,
+            test_size=test_size,
+            split="train",
+            steps_per_prompt=steps_per_prompt,
+            repeat=None,
+        )
     init_batch = flow(train_iter, iter, next)
+    config = models.TransformerConfig()
     model = models.Transformer(
         config=config, dropout_rate=dropout_rate, num_actions=num_actions
     )
@@ -121,7 +106,7 @@ def train(
         return model.init(init_rng, inputs=init_batch, train=False)
 
     with timer("Initializing variables..."):
-        init_variables = initialize_variables(init_rng, init_batch["inputs"])
+        init_variables = initialize_variables(init_rng, init_batch["action"])
 
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
@@ -164,10 +149,20 @@ def train(
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
             eval_metrics = []
+            eval_iter = trajectory_dataset(
+                batch_size=batch_size,
+                data_dir=data_dir,
+                download_dir=download_dir,
+                gamma=gamma,
+                max_dataset_step=max_dataset_step,
+                test_size=test_size,
+                split="test",
+                steps_per_prompt=steps_per_prompt,
+                repeat=1,
+            )
 
             with timer("Evaluating..."):
                 for eval_batch in eval_iter:  # type: ignore
-                    eval_batch = jax.tree_util.tree_map(lambda x: x.numpy(), eval_batch)
                     assert (
                         flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size
                     )

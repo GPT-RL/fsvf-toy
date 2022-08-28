@@ -158,7 +158,7 @@ def compute_error(estimate, targets):
 
 def eval_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
-    inputs, targets = batch["inputs"], batch["targets"]
+    inputs, targets = batch["action"], batch["action"]
     weights = jnp.where(targets > 0, 1.0, 0.0)
     logits = model.apply({"params": params}, inputs=inputs, train=False)
     return compute_metrics(logits, targets, weights)
@@ -166,7 +166,7 @@ def eval_step(params, batch, model):
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
     """Perform a single training step."""
-    train_keys = ["inputs", "targets"]
+    train_keys = ["action", "action"]
     (inputs, targets) = (batch.get(k, None) for k in train_keys)
 
     weights = jnp.where(targets > 0, 1, 0).astype(jnp.float32)

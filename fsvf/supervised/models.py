@@ -20,9 +20,6 @@ from typing import Any, Callable, Optional
 import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
-from returns.curry import partial
-from returns.pipeline import flow
-from supervised.dataset import DataPoint
 
 xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
 normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
@@ -32,8 +29,6 @@ normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
 class TransformerConfig:
     """Global hyperparameters used to minimize obnoxious kwarg plumbing."""
 
-    output_vocab_size: int
-    vocab_size: int
     attention_dropout_rate: float = 0.3
     bias_init: Callable = normal
     dropout_rate: float = 0.3
@@ -219,7 +214,7 @@ class Transformer(nn.Module):
 
         x = inputs.astype("int32")
         x = nn.Embed(
-            num_embeddings=config.vocab_size, features=config.emb_dim, name="embed"
+            num_embeddings=self.num_actions, features=config.emb_dim, name="embed"
         )(x)
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
@@ -229,7 +224,7 @@ class Transformer(nn.Module):
 
         x = nn.LayerNorm(dtype=config.dtype)(x)
         logits = nn.Dense(
-            config.output_vocab_size,
+            self.num_actions,
             kernel_init=config.kernel_init,
             bias_init=config.bias_init,
         )(x)
