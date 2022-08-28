@@ -20,6 +20,9 @@ from typing import Any, Callable, Optional
 import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
+from returns.curry import partial
+from returns.pipeline import flow
+from supervised.dataset import DataPoint
 
 xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
 normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
@@ -206,15 +209,32 @@ class Transformer(nn.Module):
           output of a transformer encoder.
 
         """
-        inputs = inputs["action"]
-        assert inputs.ndim == 2  # (batch, len)
-
         config = self.config
-
-        x = inputs.astype("int32")
-        x = nn.Embed(
-            num_embeddings=self.num_actions, features=config.emb_dim, name="embed"
-        )(x)
+        inputs = DataPoint(**inputs)
+        b, l, *state_shape = inputs.state.shape
+        # state = flow(
+        #     inputs.state.reshape(-1, *state_shape),
+        #     nn.Conv(
+        #         features=self.config.emb_dim,
+        #         kernel_size=(3, 3),
+        #         strides=(1, 1),
+        #         dtype=jnp.float32,
+        #         padding=0,
+        #     ),
+        # ).reshape(b, l, -1, self.config.emb_dim)
+        action = flow(
+            inputs.action.astype(jnp.int32),
+            nn.Embed(
+                num_embeddings=self.num_actions,
+                features=self.config.emb_dim,
+                dtype=jnp.float32,
+            ),
+            partial(jnp.reshape, newshape=(b, l, 1, self.config.emb_dim)),
+        )
+        # value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
+        # x = jnp.concatenate([state, action, value], axis=-2)
+        x = action
+        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
 
