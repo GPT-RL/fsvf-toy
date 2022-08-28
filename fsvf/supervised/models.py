@@ -241,7 +241,8 @@ class Transformer(nn.Module):
         )
         value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
         x = jnp.concatenate([state, action, value], axis=-2)
-        x = x.reshape(b, l, -1)  # type: ignore
+        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
+        x = x[:, :-1]  # exclude target
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
 

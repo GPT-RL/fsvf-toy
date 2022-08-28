@@ -24,7 +24,7 @@ import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
 from returns.curry import partial
-from returns.pipeline import flow
+from returns.pipeline import pipe
 
 
 def create_learning_rate_scheduler(
@@ -137,24 +137,27 @@ def compute_metrics(logits, labels):
     return metrics
 
 
-def compute_loss(estimate, targets):
-    return flow(
-        estimate,
-        partial(jnp.squeeze, axis=-1),
-        lambda estimate: estimate - targets,
-        jnp.square,
-        jnp.mean,
+def difference(targets: jnp.ndarray):
+    b, l = targets.shape
+
+    return pipe(
+        # [s1, a1, v1, s2, a2, v2, ...]
+        partial(jnp.pad, pad_width=[(0, 0), (1, 0), (0, 0)]),
+        # [0, s1, a1, v1, s2, a2, v2, ...]
+        partial(jnp.reshape, newshape=(b, l, -1)),
+        # [[0, v1, v2, ...], [s1, s2, ...], [a1, a2, ...]]
+        lambda estimates: estimates[:, :, -1],
+        # [a1, a2, ...]
+        lambda estimates: estimates - targets,
     )
 
 
-def compute_error(estimate, targets):
-    return flow(
-        estimate,
-        partial(jnp.squeeze, axis=-1),
-        lambda estimate: estimate - targets,
-        jnp.abs,
-        jnp.mean,
-    )
+def compute_loss(targets: jnp.ndarray):
+    return pipe(difference(targets), jnp.square, jnp.mean)
+
+
+def compute_error(targets: jnp.ndarray):
+    return pipe(difference(targets), jnp.abs, jnp.mean)
 
 
 def eval_step(params, batch, model):
@@ -162,8 +165,8 @@ def eval_step(params, batch, model):
     output = model.apply({"params": params}, inputs=batch, train=False)
     targets = get_targets(batch)
     return {
-        "loss": compute_loss(output, targets),
-        "error": compute_error(output, targets),
+        "loss": compute_loss(targets)(output),
+        "error": compute_error(targets)(output),
     }
 
 
@@ -184,7 +187,7 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
             rngs={"dropout": dropout_rng},
         )
         targets = get_targets(batch)
-        return compute_loss(output, targets), compute_error(output, targets)
+        return compute_loss(targets)(output), compute_error(targets)(output)
 
     lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
