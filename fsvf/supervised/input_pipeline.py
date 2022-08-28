@@ -237,9 +237,10 @@ def sentence_dataset_dict(
             data = {"inputs": inputs}
             if attributes_target:
                 data["targets"] = next(target_generator)
+            data["inputs"] = data["targets"]
             yield data
 
-    output_types = {k: tf.float32 for k in data_keys}
+    output_types = {k: tf.int32 for k in data_keys}
     output_shapes = {k: (None,) for k in data_keys}
     dataset = tf.data.Dataset.from_generator(
         generator, output_types=output_types, output_shapes=output_shapes

@@ -1,7 +1,6 @@
 import logging
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -19,7 +18,6 @@ from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import input_pipeline, models
 from supervised.lib import (
-    compute_metrics,
     create_learning_rate_scheduler,
     eval_step,
     pad_examples,
@@ -76,28 +74,6 @@ def train(
         yield
         logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
 
-    with timer("Loading data..."):
-        builder_kwargs = dict(
-            context_size=steps_per_prompt,
-            gamma=gamma,
-            max_checkpoint=max_dataset_step,
-            test_size=test_size,
-        )
-        data_dir = flow(
-            data_dir,
-            Path,
-            lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
-            str,
-        )
-        kwargs = dict(name="my_dataset", data_dir=str(data_dir))
-        download_and_prepare_kwargs = dict(download_dir=download_dir)
-        builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
-        builder.download_and_prepare(**download_and_prepare_kwargs)
-        ds = tfds.load(
-            **kwargs,
-            builder_kwargs=builder_kwargs,
-            download_and_prepare_kwargs=download_and_prepare_kwargs,
-        )
     # create the training and development dataset
     config = TransformerConfig(
         vocab_size=len(vocabs["forms"]),
