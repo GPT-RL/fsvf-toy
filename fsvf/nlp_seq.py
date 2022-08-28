@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from build_tree import build_tree
