@@ -323,8 +323,6 @@ def train(
     learning_rate: float,
     # number of updates between logs
     log_frequency: int,
-    # logger for logging to Hasura
-    logger: RunLogger,
     # Number of agents playing in parallel.
     num_agents: int,
     # Number of training epochs per each unroll of the policy.
@@ -335,6 +333,8 @@ def train(
     num_test_episodes: int,
     # whether to render during testing
     render: bool,
+    # logger for logging to Hasura
+    run_logger: RunLogger,
     # directory to save model checkpoints in.
     save_dir: str,
     # number of updates between checkpoints.
@@ -443,7 +443,9 @@ def train(
                         clipped = clip(lambda s: s[:first_term_step])
                         assert clipped.done[-1]
                         unclipped = clip(lambda s: s[first_term_step:])
-                        step_dir = Path(download_dir) / str(logger.run_id) / str(step)
+                        step_dir = (
+                            Path(download_dir) / str(run_logger.run_id) / str(step)
+                        )
                         step_dir.mkdir(parents=True, exist_ok=True)
 
                         with Path(step_dir, f"{i}.npz").open("wb") as f:
@@ -455,12 +457,12 @@ def train(
                 frames=frames, hours=(time.time() - start_time) / 3600, steps=step
             ) | {
                 "return": test_return,
-                "run ID": logger.run_id,
+                "run ID": run_logger.run_id,
                 "save count": save_count,
             }
             console.log(log)
-            if logger.run_id is not None:
-                logger.log(**log)
+            if run_logger.run_id is not None:
+                run_logger.log(**log)
 
         # Core training code.
         alpha = 1.0 - step / loop_steps if decaying_lr_and_clip_param else 1.0
@@ -491,7 +493,7 @@ def train(
             )
         if save_frequency and ((step + 1) % save_frequency == 0):
             checkpoints.save_checkpoint(
-                Path(save_dir) / str(logger.run_id),
+                Path(save_dir) / str(run_logger.run_id),
                 target=state,
                 step=step + 1,
                 overwrite=True,
