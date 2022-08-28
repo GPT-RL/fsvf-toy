@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from build_tree import build_tree
@@ -6,11 +7,11 @@ from supervised.train import train
 
 
 def xy():
-    yield "hours", "test error"
+    yield "hours", "test accuracy"
     for y in [
-        "test error",
+        "test accuracy",
         "test loss",
-        "error",
+        "accuracy",
         "loss",
         "best dev score",
         "steps per second",
@@ -19,15 +20,19 @@ def xy():
 
 
 if __name__ == "__main__":
-    default_log_level = dict(log_level="INFO")
+    dev_path = os.getenv("NLP_SEQ_DEV_PATH")
+    train_path = os.getenv("NLP_SEQ_TRAIN_PATH")
+    assert dev_path is not None
+    assert train_path is not None
+    defaults = dict(log_level="INFO", dev=Path(dev_path), train=Path(train_path))
     tree = build_tree(
         config_path=Path("fsvf/supervised/config.yml"),
         defaults_path=Path("fsvf/supervised/default.yml"),
-        log_defaults=dict(**default_log_level, disable_jit=False),
-        no_log_defaults=default_log_level,
+        log_defaults=dict(**defaults, disable_jit=False),
+        no_log_defaults=defaults,
         no_log_parser=flag("disable_jit", default=False),
         run=train,
-        sweep_defaults=dict(**default_log_level, disable_jit=False),
+        sweep_defaults=dict(**defaults, disable_jit=False),
         xy=xy(),
     )
     tree()

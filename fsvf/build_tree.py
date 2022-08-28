@@ -129,12 +129,7 @@ def build_tree(
             dict(parameters=parameters, run_id=logger.run_id, name=name)
         )
         defaults.update(parameters)
-        (no_sweep if sweep_id is None else run)(
-            **defaults,
-            disable_jit=False,
-            render=False,
-            run_logger=logger,
-        )
+        (no_sweep if sweep_id is None else run)(**defaults, run_logger=logger)
 
     def trainable(config: dict):
         return _log(**config)
