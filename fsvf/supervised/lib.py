@@ -160,7 +160,7 @@ def eval_step(params, batch, model):
 
 
 def get_targets(batch):
-    return batch["action"][:, -1:]
+    return batch["value"][:, -1:]
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
