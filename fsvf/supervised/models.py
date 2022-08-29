@@ -251,4 +251,4 @@ class Transformer(nn.Module):
 
         x = nn.LayerNorm(dtype=jnp.float32)(x)
         logits = nn.Dense(1)(x)
-        return logits
+        return logits.sum(1)

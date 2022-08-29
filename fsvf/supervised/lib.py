@@ -137,27 +137,16 @@ def compute_metrics(logits, labels):
     return metrics
 
 
-def difference(targets: jnp.ndarray):
-    b, l = targets.shape
-
-    return pipe(
-        # [s1, a1, v1, s2, a2, v2, ...]
-        # partial(jnp.pad, pad_width=[(0, 0), (1, 0), (0, 0)]),
-        # [0, s1, a1, v1, s2, a2, v2, ...]
-        partial(jnp.reshape, newshape=(b, l, -1)),
-        # [[0, v1, v2, ...], [s1, s2, ...], [a1, a2, ...]]
-        lambda estimates: estimates[:, :, -1],
-        # [a1, a2, ...]
-        lambda estimates: estimates - targets,
-    )
+def difference(targets: jnp.ndarray, estimates: jnp.ndarray):
+    return estimates - targets
 
 
 def compute_loss(targets: jnp.ndarray):
-    return pipe(difference(targets), jnp.square, jnp.mean)
+    return pipe(partial(difference, targets), jnp.square, jnp.mean)
 
 
 def compute_error(targets: jnp.ndarray):
-    return pipe(difference(targets), jnp.abs, jnp.mean)
+    return pipe(partial(difference, targets), jnp.abs, jnp.mean)
 
 
 def eval_step(params, batch, model):
@@ -171,7 +160,7 @@ def eval_step(params, batch, model):
 
 
 def get_targets(batch):
-    return batch["action"]
+    return batch["action"][:, -1:]
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
