@@ -4,9 +4,8 @@ import sys
 import time
 from pathlib import Path
 from shlex import quote
-from typing import Any, Callable, Iterable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
-import line
 import ray
 import yaml
 from dollar_lambda import CommandTree, Parser, argument, flag, nonpositional
@@ -16,9 +15,9 @@ from run_logger import RunLogger, create_sweep
 
 
 def build_tree(
+    charts: list[dict],
     config_path: Path,
     run: Callable,
-    xy: Iterable[tuple[str, str]],
     defaults_path: Optional[Path] = None,
     log_defaults: Optional[Mapping[str, Any]] = None,
     log_parser: Optional[Parser] = None,
@@ -113,14 +112,6 @@ def build_tree(
             ),
             hostname=socket.gethostname(),
         )
-
-        visualizer_url = os.getenv("VISUALIZER_URL")
-        assert visualizer_url is not None, "VISUALIZER_URL must be set"
-
-        charts = [
-            line.spec(color="run ID", x=x, y=y, visualizer_url=visualizer_url)
-            for x, y in xy
-        ]
 
         assert GRAPHQL_ENDPOINT is not None
         logger = RunLogger(GRAPHQL_ENDPOINT)
