@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import jax
 import jax.numpy as jnp
 import optax
-import supervised.dataset  # noqa: F401
+import supervised.ppo_dataset  # noqa: F401
 import tensorflow as tf
 from flax import jax_utils
 from flax.training import common_utils, train_state
@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import models
-from supervised.input_pipeline import trajectory_dataset
+from supervised.input_pipeline import get_ppo_dataset
 from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
@@ -78,7 +78,7 @@ def train(
         logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
 
     with timer("Loading data..."):
-        train_iter = trajectory_dataset(
+        train_iter = get_ppo_dataset(
             batch_size=batch_size,
             data_dir=data_dir,
             download_dir=download_dir,
@@ -148,7 +148,7 @@ def train(
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
             eval_metrics = []
-            eval_iter = trajectory_dataset(
+            eval_iter = get_ppo_dataset(
                 batch_size=batch_size,
                 data_dir=data_dir,
                 download_dir=download_dir,

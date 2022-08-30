@@ -16,6 +16,7 @@
 import functools
 import itertools
 import os
+import pickle
 import re
 import time
 from dataclasses import asdict, astuple
@@ -379,6 +380,13 @@ def train(
         total_frames=total_frames,
     )
     env = env_utils.create_env(env_id, test=False)
+    if download_dir is not None:
+        run_dir = Path(download_dir) / str(run_logger.run_id)
+        with (run_dir / "observation.pkl").open("wb") as f:
+            pickle.dump(env.observation_space, f)
+        with (run_dir / "action.pkl").open("wb") as f:
+            pickle.dump(env.action_space, f)
+
     model = build_model(env_id)
 
     obs_shape = env.observation_space.shape

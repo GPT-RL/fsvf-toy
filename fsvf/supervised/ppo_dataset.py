@@ -1,3 +1,4 @@
+import pickle
 from dataclasses import asdict, dataclass, replace
 from functools import reduce
 from typing import Any, Iterator
@@ -34,7 +35,7 @@ class DataPoint:
         return cls.from_kwargs(time_step=time_step, **asdict(exp_tuple))
 
 
-class MyDataset(GeneratorBasedBuilder):
+class PpoDataset(GeneratorBasedBuilder):
     """DatasetBuilder for my_dataset dataset."""
 
     VERSION = Version("1.0.0")
@@ -46,6 +47,7 @@ class MyDataset(GeneratorBasedBuilder):
         self,
         *args,
         context_size: int,
+        download_dir: str,
         gamma: float,
         max_checkpoint: int,
         test_size: int,
@@ -56,6 +58,8 @@ class MyDataset(GeneratorBasedBuilder):
         self.max_checkpoint = max_checkpoint
         self.rng = np.random.default_rng(seed=0)
         self.test_size = test_size
+        with Path(download_dir, "observation.pkl").open("rb") as f:
+            self.observation_space = pickle.load(f)
         super().__init__(*args, **kwargs)
 
     def _info(self) -> DatasetInfo:
@@ -68,7 +72,9 @@ class MyDataset(GeneratorBasedBuilder):
                 asdict(
                     DataPoint(
                         time_step=Tensor(shape=[b], dtype=tf.int64),
-                        state=Tensor(shape=[b, 5, 5, 3], dtype=tf.int64),
+                        state=Tensor(
+                            shape=[b, *self.observation_space.shape], dtype=tf.int64
+                        ),
                         action=Tensor(shape=[b], dtype=tf.int64),
                         value=Tensor(shape=[b], dtype=tf.float64),
                     )

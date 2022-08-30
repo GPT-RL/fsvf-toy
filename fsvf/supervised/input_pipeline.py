@@ -261,7 +261,7 @@ def sentence_dataset_dict(
     return dataset
 
 
-def trajectory_dataset(
+def get_ppo_dataset(
     batch_size: int,
     data_dir: str,
     download_dir: str,
@@ -290,17 +290,19 @@ def trajectory_dataset(
     """
     builder_kwargs = dict(
         context_size=steps_per_prompt,
+        download_dir=download_dir,
         gamma=gamma,
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
+    name = "ppo_" + "_".join([f"{k}{v}" for k, v in builder_kwargs.items()])
     data_dir = flow(
         data_dir,
         Path,
-        lambda d: d / "_".join([f"{k}{v}" for k, v in builder_kwargs.items()]),
+        lambda d: d / name,
         str,
     )
-    kwargs = dict(name="my_dataset", data_dir=str(data_dir))
+    kwargs = dict(name="ppo_dataset", data_dir=str(data_dir))
     download_and_prepare_kwargs = dict(download_dir=download_dir)
     builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
     builder.download_and_prepare(**download_and_prepare_kwargs)
