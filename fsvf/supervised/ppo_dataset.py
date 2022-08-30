@@ -11,7 +11,7 @@ from returns.curry import partial
 from returns.pipeline import flow
 from rich.console import Console
 from supervised import generated_dataset
-from tensorflow.data import Dataset
+from tensorflow.data import Dataset  # type: ignore
 from tensorflow_datasets.core import DatasetInfo, GeneratorBasedBuilder, Version
 from tensorflow_datasets.core.download import DownloadManager
 from tensorflow_datasets.core.features import FeaturesDict, Tensor
@@ -67,8 +67,7 @@ class PpoDataset(GeneratorBasedBuilder):
             builder=self,
             features=FeaturesDict(
                 asdict(
-                    DataPoint(
-                        time_step=Tensor(shape=[b], dtype=tf.int64),
+                    generated_dataset.DataPoint(
                         state=Tensor(
                             shape=[b, *self.observation_space.shape], dtype=tf.int64
                         ),
@@ -135,6 +134,7 @@ class PpoDataset(GeneratorBasedBuilder):
         )
         for ts in ds:  # type: ignore
             dp = DataPoint(**ts)
+            del ts["time_step"]
             key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"
             yield key, ts
 

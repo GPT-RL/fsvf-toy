@@ -22,7 +22,7 @@ import numpy as np
 from flax import linen as nn
 from returns.curry import partial
 from returns.pipeline import flow
-from supervised.ppo_dataset import DataPoint
+from supervised.generated_dataset import DataPoint
 
 xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
 normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
