@@ -82,34 +82,6 @@ class PpoDataset(GeneratorBasedBuilder):
             ),
         )
 
-    def _split_generators(self, dl_manager: DownloadManager):
-        """Download the data and define splits."""
-
-        def get_checkpoint_idxs():
-            for path in dl_manager.download_dir.glob("*/*.npz"):
-                checkpoint_idx = int(path.parent.stem)
-                if checkpoint_idx <= self.max_checkpoint:
-                    yield checkpoint_idx
-
-        checkpoint_idxs = set(get_checkpoint_idxs())
-        assert checkpoint_idxs
-        assert len(checkpoint_idxs) > self.test_size
-        test_idxs = flow(
-            checkpoint_idxs,
-            list,
-            partial(self.rng.choice, size=self.test_size, replace=False),
-            set,
-        )
-        train_idxs = checkpoint_idxs - test_idxs
-
-        def generate(idxs):
-            for idx in idxs:
-                yield from self._generate_examples(
-                    path=dl_manager.download_dir / str(idx)
-                )
-
-        return dict(train=generate(train_idxs), test=generate(test_idxs))
-
     def _generate_examples(self, path: Path) -> Iterator[tuple[str, dict[str, str]]]:
         """Generator of examples for each split."""
 
@@ -168,3 +140,34 @@ class PpoDataset(GeneratorBasedBuilder):
             dp = DataPoint(**ts)
             key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"
             yield key, ts
+
+    def _split_generators(self, dl_manager: DownloadManager):
+        """Download the data and define splits."""
+
+        def get_checkpoint_idxs():
+            for path in dl_manager.download_dir.glob("*/*.npz"):
+                checkpoint_idx = int(path.parent.stem)
+                if checkpoint_idx <= self.max_checkpoint:
+                    yield checkpoint_idx
+
+        checkpoint_idxs = set(get_checkpoint_idxs())
+        assert checkpoint_idxs
+        assert len(checkpoint_idxs) > self.test_size
+        test_idxs = flow(
+            checkpoint_idxs,
+            list,
+            partial(self.rng.choice, size=self.test_size, replace=False),
+            set,
+        )
+        train_idxs = checkpoint_idxs - test_idxs
+
+        def generate_from_data(idxs):
+            for idx in idxs:
+                yield from self._generate_examples(
+                    path=dl_manager.download_dir / str(idx)
+                )
+
+        return dict(
+            train=generate_from_data(train_idxs),
+            test=generate_from_data(test_idxs),
+        )
