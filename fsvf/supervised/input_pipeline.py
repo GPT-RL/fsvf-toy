@@ -18,7 +18,6 @@ import codecs
 import collections
 import enum
 from pathlib import Path
-from typing import Optional
 
 import tensorflow.compat.v2 as tf  # pytype: disable=import-error
 import tensorflow_datasets as tfds
@@ -262,17 +261,13 @@ def sentence_dataset_dict(
 
 
 def get_ppo_dataset(
-    batch_size: int,
     data_dir: str,
     download_dir: str,
     gamma: float,
     max_dataset_step: int,
-    repeat: Optional[int],
     test_size: int,
-    split: str,
     steps_per_prompt: int,
-    prefetch_size=tf.data.experimental.AUTOTUNE,
-):
+) -> dict[str, tf.data.Dataset]:
     """Combines sentences into a dataset of padded batches.
 
     Args:
@@ -306,17 +301,8 @@ def get_ppo_dataset(
     download_and_prepare_kwargs = dict(download_dir=download_dir)
     builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
     builder.download_and_prepare(**download_and_prepare_kwargs)
-    dataset = tfds.load(
+    return tfds.load(
         **kwargs,
         builder_kwargs=builder_kwargs,
         download_and_prepare_kwargs=download_and_prepare_kwargs,
-    )
-    dataset = dataset[split]  # type: ignore
-
-    return tfds.as_numpy(
-        dataset.shuffle(len(dataset))
-        .cache()  # cache the dataset in memory and repeat.
-        .repeat(repeat)
-        .batch(batch_size, drop_remainder=True)
-        .prefetch(prefetch_size)
-    )
+    )  # type: ignore

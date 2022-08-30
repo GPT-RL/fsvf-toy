@@ -1,12 +1,14 @@
 import logging
 import time
 from contextlib import contextmanager
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
 import optax
 import supervised.ppo_dataset  # noqa: F401
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import common_utils, train_state
 from jax import random
@@ -77,18 +79,25 @@ def train(
         yield
         logger.info(f"Took {time.time() - tick:.2f} seconds.", stacklevel=stacklevel)
 
+    def preprocess_data(ds: Dataset, repeat: Optional[int]):
+        return tfds.as_numpy(
+            ds.shuffle(len(ds))  # TODO: try removing this
+            .cache()  # cache the dataset in memory and repeat.
+            .repeat(repeat)
+            .batch(batch_size, drop_remainder=True)
+            .prefetch(tf.data.experimental.AUTOTUNE)
+        )
+
     with timer("Loading data..."):
-        train_iter = get_ppo_dataset(
-            batch_size=batch_size,
+        ppo_datasets = get_ppo_dataset(
             data_dir=data_dir,
             download_dir=download_dir,
             gamma=gamma,
             max_dataset_step=max_dataset_step,
             test_size=test_size,
-            split="train",
             steps_per_prompt=steps_per_prompt,
-            repeat=None,
         )
+        train_iter = preprocess_data(ppo_datasets["train"], repeat=None)
     init_batch = flow(train_iter, iter, next)
 
     config = models.TransformerConfig()
@@ -149,15 +158,12 @@ def train(
         if (step + 1) % eval_frequency == 0:
             eval_metrics = []
             eval_iter = get_ppo_dataset(
-                batch_size=batch_size,
                 data_dir=data_dir,
                 download_dir=download_dir,
                 gamma=gamma,
                 max_dataset_step=max_dataset_step,
                 test_size=test_size,
-                split="test",
                 steps_per_prompt=steps_per_prompt,
-                repeat=1,
             )
 
             with timer("Evaluating..."):
