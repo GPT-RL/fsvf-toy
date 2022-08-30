@@ -157,14 +157,7 @@ def train(
         train_metrics.append(metrics)
         if (step + 1) % eval_frequency == 0:
             eval_metrics = []
-            eval_iter = get_ppo_dataset(
-                data_dir=data_dir,
-                download_dir=download_dir,
-                gamma=gamma,
-                max_dataset_step=max_dataset_step,
-                test_size=test_size,
-                steps_per_prompt=steps_per_prompt,
-            )
+            eval_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
             with timer("Evaluating..."):
                 for eval_batch in eval_iter:  # type: ignore
