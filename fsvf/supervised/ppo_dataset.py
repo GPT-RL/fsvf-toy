@@ -1,6 +1,5 @@
 import pickle
 from dataclasses import asdict, dataclass, replace
-from functools import reduce
 from typing import Any, Iterator
 
 import numpy as np
@@ -11,6 +10,7 @@ from ppo.agent import ExpTuple
 from returns.curry import partial
 from returns.pipeline import flow
 from rich.console import Console
+from supervised import generated_dataset
 from tensorflow.data import Dataset
 from tensorflow_datasets.core import DatasetInfo, GeneratorBasedBuilder, Version
 from tensorflow_datasets.core.download import DownloadManager
@@ -20,15 +20,12 @@ console = Console()
 
 
 @dataclass
-class DataPoint:
+class DataPoint(generated_dataset.DataPoint):
     time_step: Any
-    state: Any
-    action: Any
-    value: Any
 
     @staticmethod
-    def from_kwargs(time_step, state, action, value, **_):
-        return DataPoint(time_step, state, action, value)
+    def from_kwargs(state, action, value, time_step, **_):
+        return DataPoint(state, action, value, time_step)
 
     @classmethod
     def from_exp_tuple(cls, time_step, exp_tuple: ExpTuple):
@@ -129,7 +126,7 @@ class PpoDataset(GeneratorBasedBuilder):
                     Dataset.from_tensor_slices,
                 )
 
-        ds = reduce(lambda acc, new: acc.concatenate(new), generate_episode())
+        ds = generated_dataset.stack(generate_episode())
         ds = tfds.as_numpy(
             ds.shuffle(len(ds))
             .repeat()
