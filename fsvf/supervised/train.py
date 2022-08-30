@@ -19,7 +19,7 @@ from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import models
 from supervised.input_pipeline import get_ppo_dataset
-from supervised.lib import create_learning_rate_scheduler, eval_step, train_step
+from supervised.lib import create_learning_rate_scheduler, test_ppo_step, train_step
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 
@@ -37,9 +37,9 @@ def train(
     num_actions: int,
     num_train_steps: int,
     run_logger: RunLogger,
-    eval_frequency: int,
     seed: int,
     steps_per_prompt: int,
+    test_frequency: int,
     test_size: int,
 ):
     if disable_jit:
@@ -134,7 +134,7 @@ def train(
         donate_argnums=(0,),
     )
 
-    p_eval_step = pmap(partial(eval_step, model=model), axis_name="batch")
+    p_test_ppo_step = pmap(partial(test_ppo_step, model=model), axis_name="batch")
 
     process_metrics = pipe(
         common_utils.get_metrics,
@@ -155,25 +155,25 @@ def train(
         batch = common_utils.shard(batch)
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
-        if (step + 1) % eval_frequency == 0:
-            eval_metrics = []
-            eval_iter = preprocess_data(ppo_datasets["test"], repeat=1)
+        if (step + 1) % test_frequency == 0:
+            test_ppo_metrics = []
+            test_ppo_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
             with timer("Evaluating..."):
-                for eval_batch in eval_iter:  # type: ignore
-                    assert (
-                        flow(eval_batch, Dataset.from_tensor_slices, len) == batch_size
+                for batch in test_ppo_iter:  # type: ignore
+                    assert flow(batch, Dataset.from_tensor_slices, len) == batch_size
+                    batch = common_utils.shard(batch)
+                    metrics = p_test_ppo_step(state.params, batch)
+                    test_ppo_metrics.append(
+                        {f"test {k}": v for k, v in metrics.items()}
                     )
-                    eval_batch = common_utils.shard(eval_batch)
-                    metrics = p_eval_step(state.params, eval_batch)
-                    eval_metrics.append({f"test {k}": v for k, v in metrics.items()})
-            eval_summary = process_metrics(eval_metrics)
+            test_ppo_summary = process_metrics(test_ppo_metrics)
             train_summary = process_metrics(train_metrics)
             train_metrics = []
-            if best_dev_score > eval_summary["test error"]:
-                best_dev_score = eval_summary["test error"]
+            if best_dev_score > test_ppo_summary["test error"]:
+                best_dev_score = test_ppo_summary["test error"]
                 # TODO: save model.
-            eval_summary["best dev score"] = best_dev_score
+            test_ppo_summary["best dev score"] = best_dev_score
             if jax.process_index() == 0:
                 steps_per_sec = step / (time.time() - tick)
                 log = {
@@ -181,7 +181,7 @@ def train(
                     "hours": (time.time() - tick) / 3600,
                     "step": step,
                     "steps per second": steps_per_sec,
-                    **eval_summary,
+                    **test_ppo_summary,
                     **train_summary,
                 }
                 console.log(log)

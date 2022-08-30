@@ -149,7 +149,7 @@ def compute_error(targets: jnp.ndarray):
     return pipe(partial(difference, targets), jnp.abs, jnp.mean)
 
 
-def eval_step(params, batch, model):
+def test_ppo_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
     output = model.apply({"params": params}, inputs=batch, train=False)
     targets = get_targets(batch)
