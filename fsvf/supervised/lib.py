@@ -159,6 +159,11 @@ def test_ppo_step(params, batch, model):
     }
 
 
+def test_generated_step(params, batch, model):
+    """Calculate evaluation metrics on a batch."""
+    return model.apply({"params": params}, inputs=batch, train=False)
+
+
 def get_targets(batch):
     return batch["value"][:, -1:]
 

@@ -10,6 +10,7 @@ from supervised.train import train
 def xy():
     yield "hours", "test error"
     for y in [
+        "accuracy",
         "test error",
         "test loss",
         "error",

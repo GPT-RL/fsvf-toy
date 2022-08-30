@@ -306,3 +306,49 @@ def get_ppo_dataset(
         builder_kwargs=builder_kwargs,
         download_and_prepare_kwargs=download_and_prepare_kwargs,
     )  # type: ignore
+
+
+def get_generated_dataset(
+    data_dir: str,
+    download_dir: str,
+    gamma: float,
+    num_generated_examples: int,
+    steps_per_prompt: int,
+) -> dict[str, tf.data.Dataset]:
+    """Combines sentences into a dataset of padded batches.
+
+    Args:
+      filename: file name of a corpus.
+      vocabs: dictionary of dictionaries to map from strings to ids.
+      attributes_input: attributes for the input.
+      attributes_target: target attributes empty targets is not inclueded.
+      batch_size: the size of a batch.
+      bucket_size: the size of a bucket.
+      repeat: number of times the dataset is repeated.
+      prefetch_size: prefetch size of the data.
+
+    Returns:
+      Returns dataset as dictionary containing the data as key value pairs.
+    """
+    builder_kwargs = dict(
+        context_size=steps_per_prompt,
+        download_dir=download_dir,
+        gamma=gamma,
+        num_generated_examples=num_generated_examples,
+    )
+    name = "generated_" + "_".join([f"{k}{v}" for k, v in builder_kwargs.items()])
+    data_dir = flow(
+        data_dir,
+        Path,
+        lambda d: d / name,
+        str,
+    )
+    kwargs = dict(name="generated_dataset", data_dir=str(data_dir))
+    download_and_prepare_kwargs = dict(download_dir=download_dir)
+    builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
+    builder.download_and_prepare(**download_and_prepare_kwargs)
+    return tfds.load(
+        **kwargs,
+        builder_kwargs=builder_kwargs,
+        download_and_prepare_kwargs=download_and_prepare_kwargs,
+    )  # type: ignore

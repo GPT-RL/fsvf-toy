@@ -41,12 +41,12 @@ class GeneratedDataset(GeneratorBasedBuilder):
         context_size: int,
         download_dir: str,
         gamma: float,
-        num_random_examples: int,
+        num_generated_examples: int,
         **kwargs,
     ):
         self.context_size = context_size
         self.gamma = gamma
-        self.num_random_examples = num_random_examples
+        self.num_generated_examples = num_generated_examples
         self.rng = np.random.default_rng(seed=0)
         with Path(download_dir, "observation.pkl").open("rb") as f:
             self.observation_space = pickle.load(f)
@@ -96,7 +96,7 @@ class GeneratedDataset(GeneratorBasedBuilder):
                 Dataset.from_tensor_slices,
             )
 
-        for _ in range(self.num_random_examples):
+        for _ in range(self.num_generated_examples):
             *state_shape, _ = self.observation_space.shape
             poss = self.rng.integers(
                 low=0, high=state_shape, size=[self.context_size + 1, 2]

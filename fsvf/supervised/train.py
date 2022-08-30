@@ -5,6 +5,7 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import supervised.ppo_dataset  # noqa: F401
 import tensorflow as tf
@@ -18,8 +19,13 @@ from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised import models
-from supervised.input_pipeline import get_ppo_dataset
-from supervised.lib import create_learning_rate_scheduler, test_ppo_step, train_step
+from supervised.input_pipeline import get_generated_dataset, get_ppo_dataset
+from supervised.lib import (
+    create_learning_rate_scheduler,
+    test_generated_step,
+    test_ppo_step,
+    train_step,
+)
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 
@@ -35,6 +41,7 @@ def train(
     log_level: str,
     max_dataset_step: int,
     num_actions: int,
+    num_generated_examples: int,
     num_train_steps: int,
     run_logger: RunLogger,
     seed: int,
@@ -98,6 +105,21 @@ def train(
             steps_per_prompt=steps_per_prompt,
         )
         train_iter = preprocess_data(ppo_datasets["train"], repeat=None)
+        generated_datasets = get_generated_dataset(
+            data_dir=data_dir,
+            download_dir=download_dir,
+            gamma=gamma,
+            num_generated_examples=num_generated_examples,
+            steps_per_prompt=steps_per_prompt,
+        )
+        generated_dataset = generated_datasets["test"]  # stupid tfds
+        generated_iter = tfds.as_numpy(
+            generated_dataset.cache()  # cache the dataset in memory and repeat.
+            .repeat(1)
+            .batch(jax.device_count(), drop_remainder=True)
+            .prefetch(tf.data.experimental.AUTOTUNE)
+        )
+
     init_batch = flow(train_iter, iter, next)
 
     config = models.TransformerConfig()
@@ -135,6 +157,9 @@ def train(
     )
 
     p_test_ppo_step = pmap(partial(test_ppo_step, model=model), axis_name="batch")
+    p_test_generated_step = pmap(
+        partial(test_generated_step, model=model), axis_name="batch"
+    )
 
     process_metrics = pipe(
         common_utils.get_metrics,
@@ -156,18 +181,34 @@ def train(
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
         if step % test_frequency == 0:
-            test_ppo_metrics = []
-            test_ppo_iter = preprocess_data(ppo_datasets["test"], repeat=1)
+            ppo_test_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
             with timer("Evaluating..."):
-                for batch in test_ppo_iter:  # type: ignore
+                accuracies = []
+                for batch in generated_iter:  # type: ignore
+                    comparisons = pipe(
+                        lambda v: v[:, :, -1],
+                        lambda v: np.expand_dims(v, -1) < np.expand_dims(v, -2),
+                    )
+                    estimate = flow(
+                        p_test_generated_step(state.params, batch),
+                        jax.device_get,
+                        comparisons,
+                    )
+                    target = comparisons(batch["value"])
+                    accuracy = np.mean(estimate == target)
+                    accuracies.append(accuracy)
+                mean_accuracy = np.mean(accuracies)
+
+                test_ppo_metrics = []
+                for batch in ppo_test_iter:  # type: ignore
                     assert flow(batch, Dataset.from_tensor_slices, len) == batch_size
                     batch = common_utils.shard(batch)
                     metrics = p_test_ppo_step(state.params, batch)
                     test_ppo_metrics.append(
                         {f"test {k}": v for k, v in metrics.items()}
                     )
-            test_ppo_summary = process_metrics(test_ppo_metrics)
+                test_ppo_summary = process_metrics(test_ppo_metrics)
             train_summary = process_metrics(train_metrics)
             train_metrics = []
             if best_dev_score > test_ppo_summary["test error"]:
@@ -177,6 +218,7 @@ def train(
             if jax.process_index() == 0:
                 steps_per_sec = step / (time.time() - tick)
                 log = {
+                    "accuracy": mean_accuracy,
                     "run ID": run_logger.run_id,
                     "hours": (time.time() - tick) / 3600,
                     "step": step,
