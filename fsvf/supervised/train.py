@@ -155,7 +155,7 @@ def train(
         batch = common_utils.shard(batch)
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
-        if (step + 1) % test_frequency == 0:
+        if step % test_frequency == 0:
             test_ppo_metrics = []
             test_ppo_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
