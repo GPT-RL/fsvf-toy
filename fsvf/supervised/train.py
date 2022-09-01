@@ -1,7 +1,7 @@
 import logging
 import time
 from contextlib import contextmanager
-from typing import Optional
+from typing import Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -18,7 +18,6 @@ from returns.pipeline import flow, pipe
 from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
-from supervised import models
 from supervised.input_pipeline import get_generated_dataset, get_ppo_dataset
 from supervised.lib import (
     create_learning_rate_scheduler,
@@ -26,23 +25,30 @@ from supervised.lib import (
     test_ppo_step,
     train_step,
 )
+from supervised.models import Transformer, TransformerConfig
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 
 
 def train(
+    attention_dropout_rate: float,
     batch_size: int,
     data_dir: str,
     disable_jit: bool,
     download_dir: str,
     dropout_rate: float,
+    emb_dim: int,
     gamma: float,
     learning_rate: float,
     log_level: str,
     max_dataset_step: int,
+    mlp_dim: int,
     num_actions: int,
     num_generated_examples: int,
+    num_heads: int,
+    num_layers: int,
     num_train_steps: int,
+    qkv_dim: int,
     run_logger: RunLogger,
     seed: int,
     steps_per_prompt: int,
@@ -120,12 +126,18 @@ def train(
             .prefetch(tf.data.experimental.AUTOTUNE)
         )
 
-    init_batch = flow(train_iter, iter, next)
+    init_batch: dict[str, jnp.ndarray] = flow(train_iter, iter, next)
 
-    config = models.TransformerConfig()
-    model = models.Transformer(
-        config=config, dropout_rate=dropout_rate, num_actions=num_actions
+    transformer_config = TransformerConfig(
+        attention_dropout_rate=attention_dropout_rate,
+        dropout_rate=dropout_rate,
+        emb_dim=emb_dim,
+        mlp_dim=mlp_dim,
+        num_heads=num_heads,
+        num_layers=num_layers,
+        qkv_dim=qkv_dim,
     )
+    model = Transformer(config=transformer_config, num_actions=num_actions)
 
     rng = random.PRNGKey(seed)
     rng, init_rng = random.split(rng)
@@ -161,7 +173,7 @@ def train(
         partial(test_generated_step, model=model), axis_name="batch"
     )
 
-    process_metrics = pipe(
+    process_metrics: Callable[[list[dict[str, np.array]]], dict[str, float]] = pipe(
         common_utils.get_metrics,
         partial(jax.tree_util.tree_map, pipe(jnp.mean, lambda x: x.item())),
     )
@@ -169,7 +181,7 @@ def train(
     # We init the first set of dropout PRNG keys, but update it afterwards inside
     # the main pmap'd training update for performance.
     dropout_rngs = random.split(rng, jax.local_device_count())
-    best_dev_score = 0
+    best_dev_score = 0.0
     init_batch = common_utils.shard(init_batch)
     with timer("Jitting train step..."):
         state, _ = p_train_step(state, init_batch, dropout_rng=dropout_rngs)
@@ -190,7 +202,7 @@ def train(
                     def comparisons(v):
                         return np.expand_dims(v, -1) < np.expand_dims(v, -2)
 
-                    estimate = flow(
+                    estimate: np.ndarray = flow(
                         p_test_generated_step(state.params, batch),
                         jax.device_get,
                         lambda e: e[:, :, -1],

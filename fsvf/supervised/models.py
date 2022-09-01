@@ -32,16 +32,16 @@ normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
 class TransformerConfig:
     """Global hyperparameters used to minimize obnoxious kwarg plumbing."""
 
-    attention_dropout_rate: float = 0.3
+    attention_dropout_rate: float
+    dropout_rate: float
+    emb_dim: int
+    mlp_dim: int
+    num_heads: int
+    num_layers: int
+    qkv_dim: int
     bias_init: Callable = normal
-    dropout_rate: float = 0.3
     dtype: Any = jnp.float32
-    emb_dim: int = 20
     kernel_init: Callable = xavier_uniform
-    mlp_dim: int = 128
-    num_heads: int = 4
-    num_layers: int = 12
-    qkv_dim: int = 512
 
 
 def sinusoidal_init(max_len=2048):
@@ -192,7 +192,6 @@ class Transformer(nn.Module):
     """Transformer Model for sequence tagging."""
 
     config: TransformerConfig
-    dropout_rate: float
     num_actions: int
 
     @nn.compact
@@ -241,7 +240,7 @@ class Transformer(nn.Module):
         x = jnp.concatenate([state, action, value], axis=-2)
         x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
         x = x[:, :-1]  # exclude target
-        x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
+        x = nn.Dropout(rate=self.config.dropout_rate)(x, deterministic=not train)
         x = AddPositionEmbs(config)(x)
 
         for _ in range(config.num_layers):
