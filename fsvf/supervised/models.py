@@ -24,7 +24,6 @@ from returns.curry import partial
 from returns.pipeline import flow
 from supervised.generated_dataset import DataPoint
 
-xavier_uniform = nn.initializers.xavier_uniform()  # type: ignore
 normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
 
 
@@ -41,7 +40,7 @@ class TransformerConfig:
     qkv_dim: int
     bias_init: Callable = normal
     dtype: Any = jnp.float32
-    kernel_init: Callable = xavier_uniform
+    kernel_init: Callable = normal
 
 
 def sinusoidal_init(max_len=2048):
