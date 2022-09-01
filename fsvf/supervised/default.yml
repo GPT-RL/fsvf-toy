@@ -13,6 +13,7 @@ num_layers: 12
 num_train_steps: 75_000
 qkv_dim: 512
 seed: 0
+save_frequency: 1000
 steps_per_prompt: 100
 test_frequency: 100
 test_size: 5

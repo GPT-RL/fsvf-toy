@@ -1,6 +1,7 @@
 import logging
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Callable, Optional
 
 import jax
@@ -11,7 +12,7 @@ import supervised.ppo_dataset  # noqa: F401
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from flax import jax_utils
-from flax.training import common_utils, train_state
+from flax.training import checkpoints, common_utils, train_state
 from jax import random
 from returns.curry import partial
 from returns.pipeline import flow, pipe
@@ -50,6 +51,8 @@ def train(
     num_train_steps: int,
     qkv_dim: int,
     run_logger: RunLogger,
+    save_dir: Optional[str],
+    save_frequency: int,
     seed: int,
     steps_per_prompt: int,
     test_frequency: int,
@@ -180,18 +183,27 @@ def train(
 
     # We init the first set of dropout PRNG keys, but update it afterwards inside
     # the main pmap'd training update for performance.
-    dropout_rngs = random.split(rng, jax.local_device_count())
     best_dev_score = 0.0
+    dropout_rngs = random.split(rng, jax.local_device_count())
     init_batch = common_utils.shard(init_batch)
+    logger.info("Training...")
+    save_count = 0
     with timer("Jitting train step..."):
         state, _ = p_train_step(state, init_batch, dropout_rng=dropout_rngs)
-    logger.info("Training...")
     train_metrics = []
     tick = time.time()
     for step, batch in zip(range(num_train_steps), train_iter):  # type: ignore
         batch = common_utils.shard(batch)
         state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
         train_metrics.append(metrics)
+        if ((step + 1) % save_frequency == 0) and save_dir is not None:
+            checkpoints.save_checkpoint(
+                Path(save_dir) / str(run_logger.run_id),
+                target=state,
+                step=step + 1,
+                overwrite=True,
+            )
+            save_count += 1
         if step % test_frequency == 0:
             ppo_test_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
@@ -238,6 +250,7 @@ def train(
                 log = {
                     "run ID": run_logger.run_id,
                     "hours": (time.time() - tick) / 3600,
+                    "save count": save_count,
                     "step": step,
                     "steps per second": steps_per_sec,
                     **test_generated_summary,

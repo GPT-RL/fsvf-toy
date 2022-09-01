@@ -18,6 +18,7 @@ def xy():
         "loss",
         "best dev score",
         "steps per second",
+        "save count",
     ]:
         yield "step", y
 
