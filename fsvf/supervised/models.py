@@ -98,12 +98,10 @@ class AddPositionEmbs(nn.Module):
         )
         length = inputs.shape[1]
         pos_emb_shape = (1, *inputs.shape[-2:])
-        pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
-            None, pos_emb_shape, None  # type: ignore
-        )
-        # pos_embedding = self.param(
-        #     "pos_embedding", config.posemb_init, pos_emb_shape
+        # pos_embedding = sinusoidal_init(max_len=inputs.shape[-2])(
+        #     None, pos_emb_shape, None  # type: ignore
         # )
+        pos_embedding = self.param("pos_embedding", normal, pos_emb_shape)
         pe = pos_embedding[:, :length, :]
         return inputs + pe
 
