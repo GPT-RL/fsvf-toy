@@ -217,7 +217,7 @@ def train(
                 test_ppo_summary = process_metrics(test_ppo_metrics)
             train_summary = process_metrics(train_metrics)
             train_metrics = []
-            if best_dev_score > test_ppo_summary["test error"]:
+            if best_dev_score < test_ppo_summary["test error"]:
                 best_dev_score = test_ppo_summary["test error"]
                 # TODO: save model.
             test_ppo_summary["best dev score"] = best_dev_score
