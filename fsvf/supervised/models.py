@@ -36,11 +36,11 @@ class TransformerConfig:
     bias_init: Callable = normal
     dropout_rate: float = 0.3
     dtype: Any = jnp.float32
-    emb_dim: int = 512
+    emb_dim: int = 20
     kernel_init: Callable = xavier_uniform
-    mlp_dim: int = 2048
-    num_heads: int = 8
-    num_layers: int = 6
+    mlp_dim: int = 128
+    num_heads: int = 4
+    num_layers: int = 12
     qkv_dim: int = 512
 
 
