@@ -184,21 +184,27 @@ def train(
             ppo_test_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
             with timer("Evaluating..."):
-                accuracies = []
+                test_generated_metrics = []
                 for batch in generated_iter:  # type: ignore
-                    comparisons = pipe(
-                        lambda v: v[:, :, -1],
-                        lambda v: np.expand_dims(v, -1) < np.expand_dims(v, -2),
-                    )
+
+                    def comparisons(v):
+                        return np.expand_dims(v, -1) < np.expand_dims(v, -2)
+
                     estimate = flow(
                         p_test_generated_step(state.params, batch),
                         jax.device_get,
-                        comparisons,
+                        lambda e: e[:, :, -1],
                     )
-                    target = comparisons(batch["value"])
-                    accuracy = np.mean(estimate == target)
-                    accuracies.append(accuracy)
-                mean_accuracy = np.mean(accuracies)
+                    target = batch["value"][:, :, -1]
+                    order_accuracy = comparisons(estimate) == comparisons(target)
+                    argmax_accuracy = estimate.argmax(1) == target.argmax(-1)
+                    test_generated_metrics.append(
+                        {
+                            "order accuracy": order_accuracy,
+                            "argmax accuracy": argmax_accuracy,
+                        }
+                    )
+                test_generated_summary = process_metrics(test_generated_metrics)
 
                 test_ppo_metrics = []
                 for batch in ppo_test_iter:  # type: ignore
@@ -218,11 +224,11 @@ def train(
             if jax.process_index() == 0:
                 steps_per_sec = step / (time.time() - tick)
                 log = {
-                    "accuracy": mean_accuracy,
                     "run ID": run_logger.run_id,
                     "hours": (time.time() - tick) / 3600,
                     "step": step,
                     "steps per second": steps_per_sec,
+                    **test_generated_summary,
                     **test_ppo_summary,
                     **train_summary,
                 }
