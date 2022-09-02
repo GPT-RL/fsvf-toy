@@ -264,8 +264,8 @@ class MyEnv(gym.Env):
     def __post_init__(self):
         self.observation_space = Dict(
             dict(
-                agent=MultiDiscrete(np.array([self.width, self.height])),
-                goal=MultiDiscrete(np.array([self.width, self.height])),
+                agent=MultiDiscrete(np.array([self.height, self.width])),
+                goal=MultiDiscrete(np.array([self.height, self.width])),
             )
         )
 
@@ -275,7 +275,7 @@ class MyEnv(gym.Env):
         return Discrete(1 + len(cls.deltas))
 
     def random_pos(self) -> np.ndarray:
-        pos = self.np_random.randint(low=0, high=(self.width, self.height))
+        pos = self.np_random.randint(low=0, high=(self.height, self.width))
         assert isinstance(pos, np.ndarray)
         return pos
 
@@ -299,15 +299,15 @@ class MyEnv(gym.Env):
             return self.state(), r, t, {}
 
         agent = self.agent + delta
-        self.agent = np.clip(agent, 0, (self.width - 1, self.height - 1))
+        self.agent = np.clip(agent, 0, (self.height - 1, self.width - 1))
         return self.state(), r, t, {}
 
     def render(self, mode: Any = ...) -> None:
-        for y in range(self.height):
-            for x in range(self.width):
-                if all(self.agent == np.array([x, y])):
+        for i in range(self.height):
+            for j in range(self.width):
+                if all(self.agent == np.array([j, i])):
                     print("A", end="")
-                elif all(self.goal == np.array([x, y])):
+                elif all(self.goal == np.array([j, i])):
                     print("G", end="")
                 else:
                     print("-", end="")
@@ -379,8 +379,8 @@ def create_env(env_id: str, test: bool):
             RenderWrapper,
         )
     elif re.match(MyEnv.pattern, env_id):
-        [(width, height)] = re.findall(MyEnv.pattern, env_id)
-        width, height = map(int, (width, height))
+        [(height, width)] = re.findall(MyEnv.pattern, env_id)
+        height, width = map(int, (height, width))
         return flow(
             MyEnv(height=height, width=width),
             TwoDGridWrapper,
