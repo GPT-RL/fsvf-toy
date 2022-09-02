@@ -41,6 +41,7 @@ def train(
     emb_dim: int,
     gamma: float,
     learning_rate: float,
+    load_path: Optional[Path],
     log_level: str,
     max_dataset_step: int,
     mlp_dim: int,
@@ -161,9 +162,12 @@ def train(
     state = train_state.TrainState.create(
         apply_fn=model.apply, params=init_variables["params"], tx=optimizer
     )
-
     # Replicate optimizer.
     state = jax_utils.replicate(state)
+
+    if load_path is not None:
+        with timer(f"Loading checkpoint from {load_path}..."):
+            state = checkpoints.restore_checkpoint(load_path, state)
 
     p_train_step = pmap(
         partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
