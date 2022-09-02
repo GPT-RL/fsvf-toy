@@ -13,6 +13,27 @@ from git.repo import Repo
 from ray import tune
 from run_logger import RunLogger, create_sweep
 
+GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
+
+
+def param_generator(params: Any):
+    if isinstance(params, Mapping):
+        if tuple(params.keys()) == ("",):
+            yield from param_generator(params[""])
+            return
+        if not params:
+            yield {}
+        else:
+            (key, value), *params = params.items()
+            for choice in param_generator(value):
+                for other_choices in param_generator(dict(params)):
+                    yield {key: choice, **other_choices}
+    elif isinstance(params, (list, tuple)):
+        for choices in params:
+            yield from param_generator(choices)
+    else:
+        yield params
+
 
 def build_tree(
     charts: list[dict],
@@ -27,31 +48,12 @@ def build_tree(
     sweep_parser: Optional[Parser] = None,
 ):
     tree = CommandTree()
-    GRAPHQL_ENDPOINT = os.getenv("GRAPHQL_ENDPOINT")
 
     if defaults_path is None:
         defaults = {}
     else:
         with defaults_path.open() as f:
             defaults = yaml.load(f, Loader=yaml.FullLoader)
-
-    def param_generator(params: Any):
-        if isinstance(params, Mapping):
-            if tuple(params.keys()) == ("",):
-                yield from param_generator(params[""])
-                return
-            if not params:
-                yield {}
-            else:
-                (key, value), *params = params.items()
-                for choice in param_generator(value):
-                    for other_choices in param_generator(dict(params)):
-                        yield {key: choice, **other_choices}
-        elif isinstance(params, (list, tuple)):
-            for choices in params:
-                yield from param_generator(choices)
-        else:
-            yield params
 
     def no_sweep(**kwargs):
         for params in param_generator(kwargs):
@@ -78,13 +80,13 @@ def build_tree(
     def log(allow_dirty: bool = False, config_path: Path = config_path, **kwargs):
         repo = Repo(".")
         with config_path.open() as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        kwargs.update(config)
+            parameters = yaml.load(f, Loader=yaml.FullLoader)
         return _log(
             **kwargs,
             **(log_defaults or {}),
             allow_dirty=allow_dirty,
             defaults=defaults,
+            parameters=parameters,
             repo=repo,
             sweep_id=None,
         )
@@ -95,7 +97,8 @@ def build_tree(
         name: str,
         repo: Repo,
         sweep_id: Optional[int],
-        **parameters,
+        parameters: dict[str, Any],
+        **kwargs,
     ):
         if not allow_dirty:
             assert not repo.is_dirty()
@@ -119,7 +122,7 @@ def build_tree(
         logger.update_metadata(  # this updates the metadata stored in the database
             dict(parameters=parameters, run_id=logger.run_id, name=name)
         )
-        defaults.update(parameters)
+        defaults.update(**parameters, **kwargs)
         (no_sweep if sweep_id is None else run)(**defaults, run_logger=logger)
 
     def trainable(config: dict):
@@ -137,11 +140,11 @@ def build_tree(
         **kwargs,
     ):
         with config_path.open() as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
+            parameters = yaml.load(f, Loader=yaml.FullLoader)
         assert GRAPHQL_ENDPOINT is not None
-        num_settings = sum(1 for _ in param_generator(config))
+        num_settings = sum(1 for _ in param_generator(parameters))
         sweep_id = create_sweep(
-            config=config,
+            config=parameters,
             graphql_endpoint=GRAPHQL_ENDPOINT,
             log_level="INFO",
             name=name,
@@ -150,16 +153,16 @@ def build_tree(
         config: "dict[str, Any]" = dict(
             defaults=defaults,
             name=name,
+            parameters={
+                k: (tune.choice(v) if random_search else tune.grid_search(v))
+                if isinstance(v, list)
+                else v
+                for k, v in parameters.items()
+            },
             repo=Repo("."),
             sweep_id=sweep_id,
             **kwargs,
             **(sweep_defaults or {}),
-            **{
-                k: (tune.choice(v) if random_search else tune.grid_search(v))
-                if isinstance(v, list)
-                else v
-                for k, v in config.items()
-            },
         )
         ray.init()
         num_cpu = os.cpu_count()
