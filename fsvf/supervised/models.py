@@ -23,6 +23,10 @@ from flax import linen as nn
 from returns.curry import partial
 from returns.pipeline import flow
 from supervised.generated_dataset import DataPoint
+from transformers.models.gpt2.modeling_flax_gpt2 import (
+    FlaxGPT2BlockCollection,
+    GPT2Config,
+)
 
 normal = nn.initializers.normal(stddev=1e-6)  # type: ignore
 
@@ -74,8 +78,6 @@ class AddPositionEmbs(nn.Module):
     Attributes:
       config: TransformerConfig dataclass containing hyperparameters.
     """
-
-    config: TransformerConfig
 
     @nn.compact
     def __call__(self, inputs):
@@ -190,7 +192,8 @@ class Encoder1DBlock(nn.Module):
 class Transformer(nn.Module):
     """Transformer Model for sequence tagging."""
 
-    config: TransformerConfig
+    config: GPT2Config
+    embed_dim: int
     num_actions: int
 
     @nn.compact
@@ -209,42 +212,46 @@ class Transformer(nn.Module):
         inputs = DataPoint(**inputs)
         b, l, *state_shape = inputs.state.shape
         state = flow(
-            inputs.state.reshape(-1, *state_shape),
-            nn.Conv(
-                features=self.config.emb_dim,
-                kernel_size=(3, 3),
-                strides=(1, 1),
-                dtype=jnp.float32,
-                padding=0,
-            ),
-            nn.relu,
-            nn.Conv(
-                features=self.config.emb_dim,
-                kernel_size=(3, 3),
-                strides=(1, 1),
-                dtype=jnp.float32,
-                padding=0,
-            ),
-        ).reshape(b, l, -1, self.config.emb_dim)
+            inputs.state.reshape(b, l, -1),
+            nn.Dense(self.embed_dim)
+            # nn.Conv(
+            #     features=self.embed_dim,
+            #     kernel_size=(3, 3),
+            #     strides=(1, 1),
+            #     dtype=jnp.float32,
+            #     padding=0,
+            # ),
+            # nn.relu,
+            # nn.Conv(
+            #     features=self.embed_dim,
+            #     kernel_size=(3, 3),
+            #     strides=(1, 1),
+            #     dtype=jnp.float32,
+            #     padding=0,
+            # ),
+        ).reshape(b, l, -1, self.embed_dim)
+        assert state.shape[2] != 0
         action = flow(
             inputs.action.astype(jnp.int32),
             nn.Embed(
                 num_embeddings=self.num_actions,
-                features=self.config.emb_dim,
+                features=self.embed_dim,
                 dtype=jnp.float32,
             ),
-            partial(jnp.reshape, newshape=(b, l, 1, self.config.emb_dim)),
+            partial(jnp.reshape, newshape=(b, l, 1, self.embed_dim)),
         )
-        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.emb_dim))
-        x = jnp.concatenate([state, action, value], axis=-2)
-        x = x.reshape(b, -1, self.config.emb_dim)  # type: ignore
-        x = x[:, :-1]  # exclude target
-        x = nn.Dropout(rate=self.config.dropout_rate)(x, deterministic=not train)
-        x = AddPositionEmbs(config)(x)
-
-        for _ in range(config.num_layers):
-            x = Encoder1DBlock(config)(x, deterministic=not train)
-
-        x = nn.LayerNorm(dtype=jnp.float32)(x)
-        logits = nn.Dense(1)(x)
-        return logits.sum(1)
+        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.embed_dim))
+        output = flow(
+            jnp.concatenate([state, action, value], axis=-2),
+            partial(jnp.reshape, newshape=(b, -1, self.embed_dim)),  # type: ignore
+            AddPositionEmbs(),
+            partial(nn.Dropout(rate=config.embd_pdrop), deterministic=not train),
+            FlaxGPT2BlockCollection(config),
+            lambda x: x[0],  # get last hidden state
+            nn.LayerNorm(epsilon=config.layer_norm_epsilon),
+            nn.Dense(1),
+        )
+        _, _, s, _ = state.shape
+        _, _, a, _ = action.shape
+        _, _, v, _ = value.shape
+        return output[:, s + a - 1 :: s + a + v, 0]

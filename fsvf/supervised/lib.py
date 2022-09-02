@@ -165,7 +165,7 @@ def test_generated_step(params, batch, model):
 
 
 def get_targets(batch):
-    return batch["value"][:, -1:]
+    return batch["value"]
 
 
 def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):

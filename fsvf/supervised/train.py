@@ -26,9 +26,10 @@ from supervised.lib import (
     test_ppo_step,
     train_step,
 )
-from supervised.models import Transformer, TransformerConfig
+from supervised.models import Transformer
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
+from transformers.models.gpt2.modeling_flax_gpt2 import GPT2Config
 
 
 def train(
@@ -132,16 +133,7 @@ def train(
 
     init_batch: dict[str, jnp.ndarray] = flow(train_iter, iter, next)
 
-    transformer_config = TransformerConfig(
-        attention_dropout_rate=attention_dropout_rate,
-        dropout_rate=dropout_rate,
-        emb_dim=emb_dim,
-        mlp_dim=mlp_dim,
-        num_heads=num_heads,
-        num_layers=num_layers,
-        qkv_dim=qkv_dim,
-    )
-    model = Transformer(config=transformer_config, num_actions=num_actions)
+    model = Transformer(config=GPT2Config(), embed_dim=emb_dim, num_actions=num_actions)
 
     rng = random.PRNGKey(seed)
     rng, init_rng = random.split(rng)
