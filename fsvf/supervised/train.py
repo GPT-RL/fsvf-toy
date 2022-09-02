@@ -224,7 +224,10 @@ def train(
                         lambda e: e[:, :, -1],
                     )
                     target = batch["value"][:, :, -1]
-                    order_accuracy = comparisons(estimate) == comparisons(target)
+                    order_accuracy = comparisons(estimate) < comparisons(target)
+                    order_accuracy = order_accuracy[
+                        comparisons(estimate) != comparisons(target)
+                    ]
                     argmax_accuracy = estimate.argmax(1) == target.argmax(-1)
                     test_generated_metrics.append(
                         {
