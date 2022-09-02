@@ -382,6 +382,7 @@ def train(
     env = env_utils.create_env(env_id, test=False)
     if download_dir is not None:
         run_dir = Path(download_dir) / str(run_logger.run_id)
+        run_dir.mkdir(parents=True, exist_ok=True)
         with (run_dir / "observation.pkl").open("wb") as f:
             pickle.dump(env.observation_space, f)
         with (run_dir / "action.pkl").open("wb") as f:
