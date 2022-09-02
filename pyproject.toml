@@ -31,6 +31,7 @@ returns = "^0.19.0"  # pipe/flow
 tensorstore = "^0.1.22"  # checkpointing
 requests-toolbelt = "^0.9.1"  # TODO: try deleting
 tensorflow-datasets = "^4.6.0"
+transformers = "^4.21.2"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
