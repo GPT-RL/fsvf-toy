@@ -21,6 +21,7 @@ from rich.logging import RichHandler
 from run_logger import RunLogger
 from supervised.input_pipeline import get_generated_dataset, get_ppo_dataset
 from supervised.lib import (
+    compute_metrics,
     create_learning_rate_scheduler,
     test_generated_step,
     test_ppo_step,
@@ -208,23 +209,24 @@ def train(
                 for batch in generated_iter:  # type: ignore
 
                     def comparisons(v):
-                        return np.expand_dims(v, -1) < np.expand_dims(v, -2)
+                        return jnp.expand_dims(v, -1) < jnp.expand_dims(v, -2)
 
-                    estimate: np.ndarray = flow(
+                    estimate: jnp.ndarray = flow(
                         p_test_generated_step(state.params, batch),
-                        jax.device_get,
                         lambda e: e[:, :, -1],
                     )
-                    target = batch["value"][:, :, -1]
-                    order_accuracy = comparisons(estimate) < comparisons(target)
+                    target = jax.device_put(batch["value"][:, :, -1])
+                    order_accuracy = comparisons(estimate) == comparisons(target)
                     order_accuracy = order_accuracy[
-                        comparisons(estimate) != comparisons(target)
+                        jnp.expand_dims(target, -1) != jnp.expand_dims(target, -2)
                     ]
                     argmax_accuracy = estimate.argmax(1) == target.argmax(-1)
+                    metrics = compute_metrics(estimate, target)
                     test_generated_metrics.append(
                         {
                             "order accuracy": order_accuracy,
                             "argmax accuracy": argmax_accuracy,
+                            **{f"generated {k}": v for k, v in metrics.items()},
                         }
                     )
                 test_generated_summary = process_metrics(test_generated_metrics)

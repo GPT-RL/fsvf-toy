@@ -24,7 +24,7 @@ import numpy as np
 from flax import linen as nn
 from flax.training import common_utils
 from returns.curry import partial
-from returns.pipeline import pipe
+from returns.pipeline import flow, pipe
 
 
 def create_learning_rate_scheduler(
@@ -128,35 +128,41 @@ def compute_accuracy(logits, targets):
     return loss.mean()
 
 
-def compute_metrics(logits, labels):
-    """Compute summary metrics."""
-    loss = compute_cross_entropy(logits, labels)
-    acc = compute_accuracy(logits, labels)
-    metrics = {"loss": loss, "accuracy": acc}
-    metrics = np.sum(metrics, -1)  # type: ignore
-    return metrics
-
-
 def difference(targets: jnp.ndarray, estimates: jnp.ndarray):
     return estimates - targets
 
 
 def compute_loss(targets: jnp.ndarray):
-    return pipe(partial(difference, targets), jnp.square, jnp.mean)
+    return pipe(partial(difference, targets), jnp.square)
 
 
 def compute_error(targets: jnp.ndarray):
-    return pipe(partial(difference, targets), jnp.abs, jnp.mean)
+    return pipe(partial(difference, targets), jnp.abs)
+
+
+def compute_round_accuracy(estimates: jnp.ndarray, targets: jnp.ndarray, decimals: int):
+    estimates = jnp.round(estimates, decimals)
+    targets = jnp.round(targets, decimals)
+    return (estimates == targets).reshape(-1)
+
+
+def compute_metrics(
+    estimates: "jnp.ndarray | np.ndarray", targets: "jnp.ndarray | np.ndarray"
+):
+    """Compute summary metrics."""
+    return {
+        "loss": compute_loss(estimates)(targets),
+        "error": compute_error(estimates)(targets),
+        "round 1 accuracy": compute_round_accuracy(estimates, targets, 1),
+        "round 2 accuracy": compute_round_accuracy(estimates, targets, 2),
+    }
 
 
 def test_ppo_step(params, batch, model):
     """Calculate evaluation metrics on a batch."""
     output = model.apply({"params": params}, inputs=batch, train=False)
     targets = get_targets(batch)
-    return {
-        "loss": compute_loss(targets)(output),
-        "error": compute_error(targets)(output),
-    }
+    return compute_metrics(output, targets)
 
 
 def test_generated_step(params, batch, model):
@@ -181,15 +187,15 @@ def train_step(state, batch, model, learning_rate_fn, dropout_rng=None):
             rngs={"dropout": dropout_rng},
         )
         targets = get_targets(batch)
-        return compute_loss(targets)(output), compute_error(targets)(output)
+        loss = flow(output, compute_loss(targets), jnp.mean)
+        return loss, compute_metrics(targets, output)
 
-    lr = learning_rate_fn(state.step)
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, error), grads = grad_fn(state.params)
+    (_, metrics), grads = grad_fn(state.params)
     grads = jax.lax.pmean(grads, "batch")
     new_state = state.apply_gradients(grads=grads)
-    metrics = {"error": error, "learning rate": lr, "loss": loss}
-    return new_state, metrics
+    lr = learning_rate_fn(state.step)
+    return new_state, dict(**metrics, lr=lr)
 
 
 def pad_examples(x, desired_batch_size):
