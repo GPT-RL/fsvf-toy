@@ -193,7 +193,7 @@ class Transformer(nn.Module):
     """Transformer Model for sequence tagging."""
 
     config: GPT2Config
-    embed_dim: int
+    input_dim: int
     num_actions: int
 
     @nn.compact
@@ -213,7 +213,7 @@ class Transformer(nn.Module):
         b, l, *state_shape = inputs.state.shape
         state = flow(
             inputs.state.reshape(b, l, -1),
-            nn.Dense(self.embed_dim)
+            nn.Dense(self.config.n_embd)
             # nn.Conv(
             #     features=self.embed_dim,
             #     kernel_size=(3, 3),
@@ -229,21 +229,21 @@ class Transformer(nn.Module):
             #     dtype=jnp.float32,
             #     padding=0,
             # ),
-        ).reshape(b, l, -1, self.embed_dim)
+        ).reshape(b, l, -1, self.config.n_embd)
         assert state.shape[2] != 0
         action = flow(
             inputs.action.astype(jnp.int32),
             nn.Embed(
                 num_embeddings=self.num_actions,
-                features=self.embed_dim,
+                features=self.config.n_embd,
                 dtype=jnp.float32,
             ),
-            partial(jnp.reshape, newshape=(b, l, 1, self.embed_dim)),
+            partial(jnp.reshape, newshape=(b, l, 1, self.config.n_embd)),
         )
-        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.embed_dim))
+        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.n_embd))
         output = flow(
             jnp.concatenate([state, action, value], axis=-2),
-            partial(jnp.reshape, newshape=(b, -1, self.embed_dim)),  # type: ignore
+            partial(jnp.reshape, newshape=(b, -1, self.config.n_embd)),  # type: ignore
             AddPositionEmbs(),
             partial(nn.Dropout(rate=config.embd_pdrop), deterministic=not train),
             FlaxGPT2BlockCollection(config),

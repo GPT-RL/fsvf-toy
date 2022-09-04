@@ -34,25 +34,22 @@ from transformers.models.gpt2.modeling_flax_gpt2 import GPT2Config
 
 
 def train(
-    attention_dropout_rate: float,
     batch_size: int,
     data_dir: str,
     disable_jit: bool,
     download_dir: str,
-    dropout_rate: float,
-    emb_dim: int,
+    input_dim: int,
     gamma: float,
     learning_rate: float,
     load_path: Optional[Path],
     log_level: str,
     max_dataset_step: int,
-    mlp_dim: int,
     num_actions: int,
     num_generated_examples: int,
-    num_heads: int,
-    num_layers: int,
+    n_embd: int,
+    n_head: int,
+    n_layer: int,
     num_train_steps: int,
-    qkv_dim: int,
     run_logger: RunLogger,
     save_dir: Optional[str],
     save_frequency: int,
@@ -134,7 +131,11 @@ def train(
 
     init_batch: dict[str, jnp.ndarray] = flow(train_iter, iter, next)
 
-    model = Transformer(config=GPT2Config(), embed_dim=emb_dim, num_actions=num_actions)
+    model = Transformer(
+        config=GPT2Config(n_embd=n_embd, n_head=n_head, n_layer=n_layer),
+        input_dim=input_dim,
+        num_actions=num_actions,
+    )
 
     rng = random.PRNGKey(seed)
     rng, init_rng = random.split(rng)
