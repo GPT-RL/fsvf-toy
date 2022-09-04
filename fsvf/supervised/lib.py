@@ -143,7 +143,7 @@ def compute_error(targets: jnp.ndarray):
 def compute_round_accuracy(estimates: jnp.ndarray, targets: jnp.ndarray, decimals: int):
     estimates = jnp.round(estimates, decimals)
     targets = jnp.round(targets, decimals)
-    return (estimates == targets).reshape(-1)
+    return estimates == targets
 
 
 def compute_metrics(

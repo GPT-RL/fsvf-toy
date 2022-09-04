@@ -175,7 +175,8 @@ def train(
     )
 
     process_metrics: Callable[[list[dict[str, np.array]]], dict[str, float]] = pipe(
-        common_utils.get_metrics,
+        jax.device_get,
+        common_utils.stack_forest,
         partial(jax.tree_util.tree_map, pipe(jnp.mean, lambda x: x.item())),
     )
 
@@ -217,17 +218,23 @@ def train(
                         lambda e: e[:, :, -1],
                     )
                     target = jax.device_put(batch["value"][:, :, -1])
-                    order_accuracy = comparisons(estimate) == comparisons(target)
-                    order_accuracy = order_accuracy[
-                        jnp.expand_dims(target, -1) != jnp.expand_dims(target, -2)
-                    ]
-                    argmax_accuracy = estimate.argmax(1) == target.argmax(-1)
+                    order_accuracy = flow(
+                        comparisons(estimate) == comparisons(target),
+                        lambda a: a[
+                            jnp.expand_dims(target, -1) != jnp.expand_dims(target, -2)
+                        ],
+                        jnp.mean,
+                    )
+                    argmax_accuracy = jnp.mean(estimate.argmax(1) == target.argmax(-1))
                     metrics = compute_metrics(estimate, target)
                     test_generated_metrics.append(
                         {
                             "order accuracy": order_accuracy,
                             "argmax accuracy": argmax_accuracy,
-                            **{f"generated {k}": v for k, v in metrics.items()},
+                            **{
+                                f"generated {k}": jnp.mean(v)
+                                for k, v in metrics.items()
+                            },
                         }
                     )
                 test_generated_summary = process_metrics(test_generated_metrics)
