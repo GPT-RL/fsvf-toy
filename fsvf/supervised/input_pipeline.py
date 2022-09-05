@@ -305,6 +305,7 @@ def get_ppo_dataset(
         **kwargs,
         builder_kwargs=builder_kwargs,
         download_and_prepare_kwargs=download_and_prepare_kwargs,
+        shuffle_files=True,
     )  # type: ignore
 
 
