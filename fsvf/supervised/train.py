@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-import supervised.ppo_dataset  # noqa: F401
+import supervised.linear_transformation_dataset  # noqa: F401
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from flax import jax_utils
@@ -19,11 +19,9 @@ from returns.pipeline import flow, pipe
 from rich.console import Console
 from rich.logging import RichHandler
 from run_logger import RunLogger
-from supervised.input_pipeline import get_generated_dataset, get_ppo_dataset
+from supervised.input_pipeline import get_linear_transformation_dataset
 from supervised.lib import (
-    compute_metrics,
     create_learning_rate_scheduler,
-    test_generated_step,
     test_ppo_step,
     train_step,
 )
@@ -37,26 +35,24 @@ def train(
     batch_size: int,
     data_dir: str,
     disable_jit: bool,
-    download_dir: str,
     input_dim: int,
-    gamma: float,
     learning_rate: float,
     load_path: Optional[Path],
     log_level: str,
-    max_dataset_step: int,
     num_actions: int,
-    num_generated_examples: int,
+    n_context: int,
+    n_dim: int,
     n_embd: int,
     n_head: int,
     n_layer: int,
+    n_test: int,
+    n_train: int,
     num_train_steps: int,
     run_logger: RunLogger,
     save_dir: Optional[str],
     save_frequency: int,
     seed: int,
-    steps_per_prompt: int,
     test_frequency: int,
-    test_size: int,
 ):
     if disable_jit:
         from jax._src.config import config
@@ -105,29 +101,14 @@ def train(
         )
 
     with timer("Loading data..."):
-        ppo_datasets = get_ppo_dataset(
+        ppo_datasets = get_linear_transformation_dataset(
             data_dir=data_dir,
-            download_dir=download_dir,
-            gamma=gamma,
-            max_dataset_step=max_dataset_step,
-            test_size=test_size,
-            steps_per_prompt=steps_per_prompt,
+            n_context=n_context,
+            n_dim=n_dim,
+            n_test=n_test,
+            n_train=n_train,
         )
         train_iter = preprocess_data(ppo_datasets["train"], repeat=None)
-        generated_datasets = get_generated_dataset(
-            data_dir=data_dir,
-            download_dir=download_dir,
-            gamma=gamma,
-            num_generated_examples=num_generated_examples,
-            steps_per_prompt=steps_per_prompt,
-        )
-        generated_dataset = generated_datasets["test"]  # stupid tfds
-        generated_iter = tfds.as_numpy(
-            generated_dataset.cache()  # cache the dataset in memory and repeat.
-            .repeat(1)
-            .batch(jax.device_count(), drop_remainder=True)
-            .prefetch(tf.data.experimental.AUTOTUNE)
-        )
 
     init_batch: dict[str, jnp.ndarray] = flow(train_iter, iter, next)
 
@@ -170,9 +151,6 @@ def train(
     )
 
     p_test_ppo_step = pmap(partial(test_ppo_step, model=model), axis_name="batch")
-    p_test_generated_step = pmap(
-        partial(test_generated_step, model=model), axis_name="batch"
-    )
 
     process_metrics: Callable[[list[dict[str, np.array]]], dict[str, float]] = pipe(
         jax.device_get,
@@ -207,38 +185,6 @@ def train(
             ppo_test_iter = preprocess_data(ppo_datasets["test"], repeat=1)
 
             with timer("Evaluating..."):
-                test_generated_metrics = []
-                for batch in generated_iter:  # type: ignore
-
-                    def comparisons(v):
-                        return jnp.expand_dims(v, -1) < jnp.expand_dims(v, -2)
-
-                    estimate: jnp.ndarray = flow(
-                        p_test_generated_step(state.params, batch),
-                        lambda e: e[:, :, -1],
-                    )
-                    target = jax.device_put(batch["value"][:, :, -1])
-                    order_accuracy = flow(
-                        comparisons(estimate) == comparisons(target),
-                        lambda a: a[
-                            jnp.expand_dims(target, -1) != jnp.expand_dims(target, -2)
-                        ],
-                        jnp.mean,
-                    )
-                    argmax_accuracy = jnp.mean(estimate.argmax(1) == target.argmax(-1))
-                    metrics = compute_metrics(estimate, target)
-                    test_generated_metrics.append(
-                        {
-                            "order accuracy": order_accuracy,
-                            "argmax accuracy": argmax_accuracy,
-                            **{
-                                f"generated {k}": jnp.mean(v)
-                                for k, v in metrics.items()
-                            },
-                        }
-                    )
-                test_generated_summary = process_metrics(test_generated_metrics)
-
                 test_ppo_metrics = []
                 for batch in ppo_test_iter:  # type: ignore
                     assert flow(batch, Dataset.from_tensor_slices, len) == batch_size
@@ -262,7 +208,6 @@ def train(
                     "save count": save_count,
                     "step": step,
                     "steps per second": steps_per_sec,
-                    **test_generated_summary,
                     **test_ppo_summary,
                     **train_summary,
                 }

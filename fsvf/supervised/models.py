@@ -22,7 +22,7 @@ import numpy as np
 from flax import linen as nn
 from returns.curry import partial
 from returns.pipeline import flow
-from supervised.generated_dataset import DataPoint
+from supervised.linear_transformation_dataset import DataPoint
 from transformers.models.gpt2.modeling_flax_gpt2 import (
     FlaxGPT2BlockCollection,
     GPT2Config,
@@ -211,40 +211,14 @@ class Transformer(nn.Module):
         config = self.config
         assert config.n_embd % config.n_head == 0
         inputs = DataPoint(**inputs)
-        b, l, *state_shape = inputs.state.shape
-        state = flow(
-            inputs.state.reshape(b, l, -1),
-            nn.Dense(self.config.n_embd)
-            # nn.Conv(
-            #     features=self.embed_dim,
-            #     kernel_size=(3, 3),
-            #     strides=(1, 1),
-            #     dtype=jnp.float32,
-            #     padding=0,
-            # ),
-            # nn.relu,
-            # nn.Conv(
-            #     features=self.embed_dim,
-            #     kernel_size=(3, 3),
-            #     strides=(1, 1),
-            #     dtype=jnp.float32,
-            #     padding=0,
-            # ),
-        ).reshape(b, l, -1, self.config.n_embd)
-        assert state.shape[2] != 0
-        action = flow(
-            inputs.action.astype(jnp.int32),
-            nn.Embed(
-                num_embeddings=self.num_actions,
-                features=self.config.n_embd,
-                dtype=jnp.float32,
-            ),
-            partial(jnp.reshape, newshape=(b, l, 1, self.config.n_embd)),
-        )
-        value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.n_embd))
+        b, _, d = inputs.X.shape
         output = flow(
-            jnp.concatenate([state, action, value], axis=-2),
-            partial(jnp.reshape, newshape=(b, -1, self.config.n_embd)),  # type: ignore
+            inputs.Y,
+            partial(jnp.expand_dims, axis=-1),
+            partial(jnp.pad, pad_width=[(0, 0), (0, 0), (0, d - 1)]),
+            lambda Y: jnp.concatenate([inputs.X, Y], axis=1),
+            nn.Dense(config.n_embd),
+            partial(jnp.reshape, newshape=(b, -1, config.n_embd)),  # type: ignore
             AddPositionEmbs(),
             partial(nn.Dropout(rate=config.embd_pdrop), deterministic=not train),
             FlaxGPT2BlockCollection(config),
@@ -252,7 +226,4 @@ class Transformer(nn.Module):
             nn.LayerNorm(epsilon=config.layer_norm_epsilon),
             nn.Dense(1),
         )
-        _, _, s, _ = state.shape
-        _, _, a, _ = action.shape
-        _, _, v, _ = value.shape
-        return output[:, s + a - 1 :: s + a + v, 0]
+        return output[:, ::2, 0]

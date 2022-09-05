@@ -352,3 +352,51 @@ def get_generated_dataset(
         builder_kwargs=builder_kwargs,
         download_and_prepare_kwargs=download_and_prepare_kwargs,
     )  # type: ignore
+
+
+def get_linear_transformation_dataset(
+    data_dir: str,
+    n_context: int,
+    n_dim: int,
+    n_test: int,
+    n_train: int,
+) -> dict[str, tf.data.Dataset]:
+    """Combines sentences into a dataset of padded batches.
+
+    Args:
+      filename: file name of a corpus.
+      vocabs: dictionary of dictionaries to map from strings to ids.
+      attributes_input: attributes for the input.
+      attributes_target: target attributes empty targets is not inclueded.
+      batch_size: the size of a batch.
+      bucket_size: the size of a bucket.
+      repeat: number of times the dataset is repeated.
+      prefetch_size: prefetch size of the data.
+
+    Returns:
+      Returns dataset as dictionary containing the data as key value pairs.
+    """
+    builder_kwargs = dict(
+        n_context=n_context,
+        n_dim=n_dim,
+        n_test=n_test,
+        n_train=n_train,
+    )
+    name = "linear_transformation_" + "_".join(
+        [f"{k}{v}" for k, v in builder_kwargs.items()]
+    )
+    data_dir = flow(
+        data_dir,
+        Path,
+        lambda d: d / name,
+        str,
+    )
+    kwargs = dict(name="linear_transformation_dataset", data_dir=str(data_dir))
+    download_and_prepare_kwargs = dict()
+    builder = tfds.builder(**kwargs, **builder_kwargs)  # type: ignore
+    builder.download_and_prepare(**download_and_prepare_kwargs)
+    return tfds.load(
+        **kwargs,
+        builder_kwargs=builder_kwargs,
+        download_and_prepare_kwargs=download_and_prepare_kwargs,
+    )  # type: ignore

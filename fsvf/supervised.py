@@ -13,12 +13,6 @@ from supervised.train import train
 def xy():
     yield "hours", "test error"
     for y in [
-        "order accuracy",
-        "argmax accuracy",
-        "generated error",
-        "generated loss",
-        "generated round 1 accuracy",
-        "generated round 2 accuracy",
         "test error",
         "test loss",
         "test round 1 accuracy",
