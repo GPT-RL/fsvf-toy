@@ -12,3 +12,4 @@ ppo/config.yml
 .vscode/
 Roms.rar
 ignore.py
+.mypy_cache/
