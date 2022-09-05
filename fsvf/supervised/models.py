@@ -209,6 +209,7 @@ class Transformer(nn.Module):
 
         """
         config = self.config
+        assert config.n_embd % config.n_head == 0
         inputs = DataPoint(**inputs)
         b, l, *state_shape = inputs.state.shape
         state = flow(
