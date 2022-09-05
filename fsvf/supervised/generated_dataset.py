@@ -41,11 +41,13 @@ class GeneratedDataset(GeneratorBasedBuilder):
         context_size: int,
         download_dir: str,
         gamma: float,
+        horizon: int,
         num_generated_examples: int,
         **kwargs,
     ):
         self.context_size = context_size
         self.gamma = gamma
+        self.horizon = horizon
         self.num_generated_examples = num_generated_examples
         self.rng = np.random.default_rng(seed=0)
         with Path(download_dir, "observation.pkl").open("rb") as f:
@@ -81,7 +83,7 @@ class GeneratedDataset(GeneratorBasedBuilder):
             new_poss = poss + MyEnv.deltas[actions]
             new_poss = np.clip(new_poss, [0, 0], np.array(state_shape) - 1)
             distances = flow(new_poss - goals, np.abs, partial(np.sum, axis=1))
-            values = self.gamma ** (1 + distances)
+            values = self.gamma ** (1 + distances) * (distances < self.horizon)
             states = np.zeros(
                 (len(poss), *self.observation_space.shape), dtype=np.int64
             )

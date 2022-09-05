@@ -264,6 +264,7 @@ def get_ppo_dataset(
     data_dir: str,
     download_dir: str,
     gamma: float,
+    horizon: int,
     max_dataset_step: int,
     test_size: int,
     steps_per_prompt: int,
@@ -287,6 +288,7 @@ def get_ppo_dataset(
         context_size=steps_per_prompt,
         download_dir=download_dir,
         gamma=gamma,
+        horizon=horizon,
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
@@ -313,6 +315,7 @@ def get_generated_dataset(
     data_dir: str,
     download_dir: str,
     gamma: float,
+    horizon: int,
     num_generated_examples: int,
     steps_per_prompt: int,
 ) -> dict[str, tf.data.Dataset]:
@@ -335,6 +338,7 @@ def get_generated_dataset(
         context_size=steps_per_prompt,
         download_dir=download_dir,
         gamma=gamma,
+        horizon=horizon,
         num_generated_examples=num_generated_examples,
     )
     name = "generated_" + "_".join([f"{k}{v}" for k, v in builder_kwargs.items()])

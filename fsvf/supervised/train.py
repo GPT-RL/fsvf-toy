@@ -109,6 +109,7 @@ def train(
             data_dir=data_dir,
             download_dir=download_dir,
             gamma=gamma,
+            horizon=0,
             max_dataset_step=max_dataset_step,
             test_size=test_size,
             steps_per_prompt=steps_per_prompt,
@@ -118,6 +119,7 @@ def train(
             data_dir=data_dir,
             download_dir=download_dir,
             gamma=gamma,
+            horizon=0,
             num_generated_examples=num_generated_examples,
             steps_per_prompt=steps_per_prompt,
         )

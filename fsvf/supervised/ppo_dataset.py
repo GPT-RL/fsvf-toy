@@ -46,12 +46,14 @@ class PpoDataset(GeneratorBasedBuilder):
         context_size: int,
         download_dir: str,
         gamma: float,
+        horizon: int,
         max_checkpoint: int,
         test_size: int,
         **kwargs,
     ):
         self.context_size = context_size
         self.gamma = gamma
+        self.horizon = horizon
         self.max_checkpoint = max_checkpoint
         self.rng = np.random.default_rng(seed=0)
         self.test_size = test_size
@@ -114,6 +116,9 @@ class PpoDataset(GeneratorBasedBuilder):
                     # array([[1.        , 0.9       ],
                     #        [1.11111111, 1.        ]])
                     np.triu,
+                    # array([[1., 0.9],
+                    #        [0., 1. ]])
+                    partial(np.tril, k=self.horizon),
                     # array([[1., 0.9],
                     #        [0., 1. ]])
                     lambda discounts: discounts @ episode.reward,
