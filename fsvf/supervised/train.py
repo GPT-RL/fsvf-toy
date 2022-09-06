@@ -159,13 +159,15 @@ def train(
     dropout_rngs = random.split(rng, jax.local_device_count())
     logger.info("Training...")
     save_count = 0
+    step = -1
     p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
     for curriculum_level, (train_iter, ppo_test_iter) in enumerate(curriculum()):
-        for step, batch in flow(
-            train_iter, lambda it: itertools.islice(it, num_curriculum_steps), enumerate
+        for batch in flow(
+            train_iter, lambda it: itertools.islice(it, num_curriculum_steps)
         ):  # type: ignore
+            step += 1
             batch = common_utils.shard(batch)
             if p_train_step is None:
                 model = Transformer(
