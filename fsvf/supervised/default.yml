@@ -8,7 +8,7 @@ n_embd: 768
 n_head: 12
 n_layer: 12
 num_generated_examples: 1000
-num_train_steps: 75_000
+num_curriculum_steps: 15_000
 seed: 0
 save_frequency: 1000
 steps_per_prompt: 100

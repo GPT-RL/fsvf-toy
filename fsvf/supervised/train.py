@@ -1,3 +1,4 @@
+import itertools
 import logging
 import time
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ import tensorflow_datasets as tfds
 from flax import jax_utils
 from flax.training import checkpoints, common_utils, train_state
 from jax import random
+from jax.tree_util import tree_map
 from returns.curry import partial
 from returns.pipeline import flow, pipe
 from rich.console import Console
@@ -45,11 +47,11 @@ def train(
     log_level: str,
     max_dataset_step: int,
     num_actions: int,
+    num_curriculum_steps: int,
     num_generated_examples: int,
     n_embd: int,
     n_head: int,
     n_layer: int,
-    num_train_steps: int,
     run_logger: RunLogger,
     save_dir: Optional[str],
     save_frequency: int,
@@ -105,16 +107,23 @@ def train(
         )
 
     with timer("Loading data..."):
-        ppo_datasets = get_ppo_dataset(
-            data_dir=data_dir,
-            download_dir=download_dir,
-            gamma=gamma,
-            horizon=0,
-            max_dataset_step=max_dataset_step,
-            test_size=test_size,
-            steps_per_prompt=steps_per_prompt,
-        )
-        train_iter = preprocess_data(ppo_datasets["train"], repeat=None)
+
+        def curriculum():
+            for horizon in itertools.count():
+                ppo_datasets = get_ppo_dataset(
+                    data_dir=data_dir,
+                    download_dir=download_dir,
+                    gamma=gamma,
+                    horizon=horizon,
+                    max_dataset_step=max_dataset_step,
+                    test_size=test_size,
+                    steps_per_prompt=steps_per_prompt,
+                )
+                yield (
+                    preprocess_data(ppo_datasets["train"], repeat=None),
+                    preprocess_data(ppo_datasets["test"], repeat=1),
+                )
+
         generated_datasets = get_generated_dataset(
             data_dir=data_dir,
             download_dir=download_dir,
@@ -130,144 +139,155 @@ def train(
             .batch(jax.device_count(), drop_remainder=True)
             .prefetch(tf.data.experimental.AUTOTUNE)
         )
-
-    init_batch: dict[str, jnp.ndarray] = flow(train_iter, iter, next)
-
-    model = Transformer(
-        config=GPT2Config(n_embd=n_embd, n_head=n_head, n_layer=n_layer),
-        input_dim=input_dim,
-        num_actions=num_actions,
-    )
-
-    rng = random.PRNGKey(seed)
-    rng, init_rng = random.split(rng)
-
-    # call a jitted initialization function to get the initial parameter tree
-    @jax.jit
-    def initialize_variables(init_rng, init_batch):
-        return model.init(init_rng, inputs=init_batch, train=False)
-
-    with timer("Initializing variables..."):
-        init_variables = initialize_variables(init_rng, init_batch)
-
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
     optimizer = optax.adamw(
         learning_rate_fn, b1=0.9, b2=0.98, eps=1e-9, weight_decay=1e-1
     )
-    state = train_state.TrainState.create(
-        apply_fn=model.apply, params=init_variables["params"], tx=optimizer
-    )
-    # Replicate optimizer.
-    state = jax_utils.replicate(state)
-
-    if load_path is not None:
-        with timer(f"Loading checkpoint from {load_path}..."):
-            state = checkpoints.restore_checkpoint(load_path, state)
-
-    p_train_step = pmap(
-        partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
-        axis_name="batch",
-        donate_argnums=(0,),
-    )
-
-    p_test_ppo_step = pmap(partial(test_ppo_step, model=model), axis_name="batch")
-    p_test_generated_step = pmap(
-        partial(test_generated_step, model=model), axis_name="batch"
-    )
+    rng = random.PRNGKey(seed)
+    rng, init_rng = random.split(rng)
 
     process_metrics: Callable[[list[dict[str, np.array]]], dict[str, float]] = pipe(
         jax.device_get,
         common_utils.stack_forest,
-        partial(jax.tree_util.tree_map, pipe(jnp.mean, lambda x: x.item())),
+        partial(tree_map, pipe(jnp.mean, lambda x: x.item())),
     )
 
     # We init the first set of dropout PRNG keys, but update it afterwards inside
     # the main pmap'd training update for performance.
     best_dev_score = 0.0
     dropout_rngs = random.split(rng, jax.local_device_count())
-    init_batch = common_utils.shard(init_batch)
     logger.info("Training...")
     save_count = 0
-    with timer("Jitting train step..."):
-        state, _ = p_train_step(state, init_batch, dropout_rng=dropout_rngs)
+    p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
-    for step, batch in zip(range(num_train_steps), train_iter):  # type: ignore
-        batch = common_utils.shard(batch)
-        state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
-        train_metrics.append(metrics)
-        if ((step + 1) % save_frequency == 0) and save_dir is not None:
-            checkpoints.save_checkpoint(
-                Path(save_dir) / str(run_logger.run_id),
-                target=state,
-                step=step + 1,
-                overwrite=True,
-            )
-            save_count += 1
-        if step % test_frequency == 0:
-            ppo_test_iter = preprocess_data(ppo_datasets["test"], repeat=1)
+    for curriculum_level, (train_iter, ppo_test_iter) in enumerate(curriculum()):
+        for step, batch in flow(
+            train_iter, lambda it: itertools.islice(it, num_curriculum_steps), enumerate
+        ):  # type: ignore
+            batch = common_utils.shard(batch)
+            if p_train_step is None:
+                model = Transformer(
+                    config=GPT2Config(n_embd=n_embd, n_head=n_head, n_layer=n_layer),
+                    input_dim=input_dim,
+                    num_actions=num_actions,
+                )
 
-            with timer("Evaluating..."):
-                test_generated_metrics = []
-                for batch in generated_iter:  # type: ignore
+                # call a jitted initialization function to get the initial parameter tree
+                @jax.jit
+                def initialize_variables(init_rng, init_batch):
+                    return model.init(init_rng, inputs=init_batch, train=False)
 
-                    def comparisons(v):
-                        return jnp.expand_dims(v, -1) < jnp.expand_dims(v, -2)
+                with timer("Initializing variables..."):
+                    init_variables = initialize_variables(
+                        init_rng, tree_map(lambda xs: xs[0], batch)
+                    )
 
-                    estimate: jnp.ndarray = flow(
-                        p_test_generated_step(state.params, batch),
-                        lambda e: e[:, :, -1],
-                    )
-                    target = jax.device_put(batch["value"][:, :, -1])
-                    order_accuracy = flow(
-                        comparisons(estimate) == comparisons(target),
-                        lambda a: a[
-                            jnp.expand_dims(target, -1) != jnp.expand_dims(target, -2)
-                        ],
-                        jnp.mean,
-                    )
-                    argmax_accuracy = jnp.mean(estimate.argmax(1) == target.argmax(-1))
-                    metrics = compute_metrics(estimate, target)
-                    test_generated_metrics.append(
-                        {
-                            "order accuracy": order_accuracy,
-                            "argmax accuracy": argmax_accuracy,
-                            **{
-                                f"generated {k}": jnp.mean(v)
-                                for k, v in metrics.items()
-                            },
-                        }
-                    )
-                test_generated_summary = process_metrics(test_generated_metrics)
+                state = train_state.TrainState.create(
+                    apply_fn=model.apply, params=init_variables["params"], tx=optimizer
+                )
+                # Replicate optimizer.
+                state = jax_utils.replicate(state)
 
-                test_ppo_metrics = []
-                for batch in ppo_test_iter:  # type: ignore
-                    assert flow(batch, Dataset.from_tensor_slices, len) == batch_size
-                    batch = common_utils.shard(batch)
-                    metrics = p_test_ppo_step(state.params, batch)
-                    test_ppo_metrics.append(
-                        {f"test {k}": v for k, v in metrics.items()}
+                if load_path is not None:
+                    with timer(f"Loading checkpoint from {load_path}..."):
+                        state = checkpoints.restore_checkpoint(load_path, state)
+
+                p_train_step = pmap(
+                    partial(train_step, model=model, learning_rate_fn=learning_rate_fn),
+                    axis_name="batch",
+                    donate_argnums=(0,),
+                )
+                p_test_ppo_step = pmap(
+                    partial(test_ppo_step, model=model), axis_name="batch"
+                )
+                p_test_generated_step = pmap(
+                    partial(test_generated_step, model=model), axis_name="batch"
+                )
+                with timer("Jitting train step..."):
+                    state, metrics = p_train_step(
+                        state, batch, dropout_rng=dropout_rngs
                     )
-                test_ppo_summary = process_metrics(test_ppo_metrics)
-            train_summary = process_metrics(train_metrics)
-            train_metrics = []
-            if best_dev_score < test_ppo_summary["test error"]:
-                best_dev_score = test_ppo_summary["test error"]
-                # TODO: save model.
-            test_ppo_summary["best dev score"] = best_dev_score
-            if jax.process_index() == 0:
-                steps_per_sec = step / (time.time() - tick)
-                log = {
-                    "run ID": run_logger.run_id,
-                    "hours": (time.time() - tick) / 3600,
-                    "save count": save_count,
-                    "step": step,
-                    "steps per second": steps_per_sec,
-                    **test_generated_summary,
-                    **test_ppo_summary,
-                    **train_summary,
-                }
-                console.log(log)
-                if run_logger.run_id is not None:
-                    run_logger.log(**log)
+            else:
+                state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
+            train_metrics.append(metrics)
+            if ((step + 1) % save_frequency == 0) and save_dir is not None:
+                checkpoints.save_checkpoint(
+                    Path(save_dir) / str(run_logger.run_id),
+                    target=state,
+                    step=step + 1,
+                    overwrite=True,
+                )
+                save_count += 1
+            if step % test_frequency == 0:
+
+                with timer("Evaluating..."):
+                    test_generated_metrics = []
+                    for batch in generated_iter:  # type: ignore
+
+                        def comparisons(v):
+                            return jnp.expand_dims(v, -1) < jnp.expand_dims(v, -2)
+
+                        estimate: jnp.ndarray = flow(
+                            p_test_generated_step(state.params, batch),
+                            lambda e: e[:, :, -1],
+                        )
+                        target = jax.device_put(batch["value"][:, :, -1])
+                        order_accuracy = flow(
+                            comparisons(estimate) == comparisons(target),
+                            lambda a: a[
+                                jnp.expand_dims(target, -1)
+                                != jnp.expand_dims(target, -2)
+                            ],
+                            jnp.mean,
+                        )
+                        argmax_accuracy = jnp.mean(
+                            estimate.argmax(1) == target.argmax(-1)
+                        )
+                        metrics = compute_metrics(estimate, target)
+                        test_generated_metrics.append(
+                            {
+                                "order accuracy": order_accuracy,
+                                "argmax accuracy": argmax_accuracy,
+                                **{
+                                    f"generated {k}": jnp.mean(v)
+                                    for k, v in metrics.items()
+                                },
+                            }
+                        )
+                    test_generated_summary = process_metrics(test_generated_metrics)
+
+                    test_ppo_metrics = []
+                    for batch in ppo_test_iter:  # type: ignore
+                        assert (
+                            flow(batch, Dataset.from_tensor_slices, len) == batch_size
+                        )
+                        batch = common_utils.shard(batch)
+                        metrics = p_test_ppo_step(state.params, batch)
+                        test_ppo_metrics.append(
+                            {f"test {k}": v for k, v in metrics.items()}
+                        )
+                    test_ppo_summary = process_metrics(test_ppo_metrics)
+                train_summary = process_metrics(train_metrics)
+                train_metrics = []
+                if best_dev_score < test_ppo_summary["test error"]:
+                    best_dev_score = test_ppo_summary["test error"]
+                    # TODO: save model.
+                test_ppo_summary["best dev score"] = best_dev_score
+                if jax.process_index() == 0:
+                    steps_per_sec = step / (time.time() - tick)
+                    log = {
+                        "curriculum level": curriculum_level,
+                        "run ID": run_logger.run_id,
+                        "hours": (time.time() - tick) / 3600,
+                        "save count": save_count,
+                        "step": step,
+                        "steps per second": steps_per_sec,
+                        **test_generated_summary,
+                        **test_ppo_summary,
+                        **train_summary,
+                    }
+                    console.log(log)
+                    if run_logger.run_id is not None:
+                        run_logger.log(**log)
