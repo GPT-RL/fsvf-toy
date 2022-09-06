@@ -243,7 +243,8 @@ def train(
                             jnp.mean,
                         )
                         argmax_accuracy = jnp.mean(
-                            estimate.argmax(1) == target.argmax(-1)
+                            target[jnp.arange(len(estimate)), estimate.argmax(1)]
+                            == target.max(-1)
                         )
                         metrics = compute_metrics(estimate, target)
                         test_generated_metrics.append(
