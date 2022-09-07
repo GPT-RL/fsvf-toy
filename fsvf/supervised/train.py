@@ -165,7 +165,11 @@ def train(
     tick = time.time()
     for curriculum_level, (train_iter, ppo_test_iter) in enumerate(curriculum()):
         for batch in flow(
-            train_iter, lambda it: itertools.islice(it, num_curriculum_steps)
+            train_iter,
+            lambda it: itertools.islice(
+                it,
+                (1 + curriculum_level) * num_curriculum_steps * 10**curriculum_level,
+            ),
         ):  # type: ignore
             step += 1
             batch = common_utils.shard(batch)
