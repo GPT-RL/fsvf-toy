@@ -77,10 +77,10 @@ class GeneratedDataset(GeneratorBasedBuilder):
         )
 
     def _generate_examples(self, _):
-        def make_ds(poss: np.ndarray, goals: np.ndarray, actions: np.ndarray):
+        def make_ds(poss: np.ndarray, goals: np.ndarray, action: int):
             *state_shape, _ = self.observation_space.shape
 
-            new_poss = poss + MyEnv.deltas[actions]
+            new_poss = poss + MyEnv.deltas[action]
             new_poss = np.clip(new_poss, [0, 0], np.array(state_shape) - 1)
             distances = flow(new_poss - goals, np.abs, partial(np.sum, axis=1))
             values = self.gamma ** (1 + distances) * (distances < self.horizon)
@@ -100,31 +100,24 @@ class GeneratedDataset(GeneratorBasedBuilder):
 
         for _ in range(self.num_generated_examples):
             *state_shape, _ = self.observation_space.shape
-            poss = self.rng.integers(
-                low=0, high=state_shape, size=[self.context_size + 1, 2]
-            )
-            goals = self.rng.integers(
-                low=0, high=state_shape, size=[self.context_size + 1, 2]
-            )
-            actions = self.rng.integers(
-                low=0, high=self.num_actions, size=[self.context_size]
-            )
-            context = make_ds(poss[:-1], goals[:-1], actions)
-
-            def add_query(action: int):
-                query = make_ds(poss[-1:], goals[-1:], np.array([action]))
+            actions = range(self.num_actions)
+            for action in actions:
+                poss = self.rng.integers(
+                    low=0, high=state_shape, size=[self.context_size + 1, 2]
+                )
+                goals = self.rng.integers(
+                    low=0, high=state_shape, size=[self.context_size + 1, 2]
+                )
+                context = make_ds(poss[:-1], goals[:-1], action)
+                query = make_ds(poss[-1:], goals[-1:], action)
                 dp = context.concatenate(query)
-                return dp.batch(len(dp))
-
-            for dp in flow(
-                self.num_actions,
-                range,
-                partial(map, add_query),
-                stack,
-                lambda d: d.batch(self.num_actions),
-                tfds.as_numpy,
-            ):
-                yield str(self.rng.bit_generator.state["state"]), dp
+                for dp in flow(
+                    dp.batch(len(dp)),
+                    stack,
+                    lambda d: d.batch(self.num_actions),
+                    tfds.as_numpy,
+                ):
+                    yield str(self.rng.bit_generator.state["state"]), dp
 
     def _split_generators(self, _):
         """Download the data and define splits."""

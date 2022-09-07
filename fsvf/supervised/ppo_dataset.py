@@ -97,6 +97,7 @@ class PpoDataset(GeneratorBasedBuilder):
                     lambda exp: replace(exp, state=exp.state.squeeze(1)),
                 )
                 n = episode.reward.size
+
                 yield flow(
                     np.mgrid[:n, :n],
                     # array([[[0, 0],
@@ -130,16 +131,22 @@ class PpoDataset(GeneratorBasedBuilder):
                     Dataset.from_tensor_slices,
                 )
 
+        def key_f(row):
+            return tf.cast(row["action"], tf.int64)
+
         ds = generated_dataset.stack(generate_episode())
-        ds = tfds.as_numpy(
-            ds.shuffle(len(ds))
-            .repeat()
-            .batch(1 + self.context_size, drop_remainder=True)
-            .take(len(ds))
+        length = len(ds)
+        ds = ds.shuffle(len(ds)).group_by_window(  # shuffle within batch
+            key_f,
+            lambda _, n: n.batch(1 + self.context_size, drop_remainder=True),
+            window_size=length,
         )
-        for ts in ds:  # type: ignore
+        ds = ds.shuffle(length)  # shuffle between batches
+
+        for ts in tfds.as_numpy(ds):  # type: ignore
             dp = DataPoint(**ts)
             del ts["time_step"]
+            assert np.unique(dp.action).size == 1
             key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"
             yield key, ts
 

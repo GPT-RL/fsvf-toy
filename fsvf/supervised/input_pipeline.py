@@ -292,7 +292,9 @@ def get_ppo_dataset(
         max_checkpoint=max_dataset_step,
         test_size=test_size,
     )
-    name = "ppo_" + "_".join([f"{k}{v}" for k, v in builder_kwargs.items()])
+    name = "ppo_group_actions" + "_".join(
+        [f"{k}{v}" for k, v in builder_kwargs.items()]
+    )
     data_dir = flow(
         data_dir,
         Path,

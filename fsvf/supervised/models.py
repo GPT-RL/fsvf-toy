@@ -232,18 +232,9 @@ class Transformer(nn.Module):
             # ),
         ).reshape(b, l, -1, self.config.n_embd)
         assert state.shape[2] != 0
-        action = flow(
-            inputs.action.astype(jnp.int32),
-            nn.Embed(
-                num_embeddings=self.num_actions,
-                features=self.config.n_embd,
-                dtype=jnp.float32,
-            ),
-            partial(jnp.reshape, newshape=(b, l, 1, self.config.n_embd)),
-        )
         value = flow(inputs.value.reshape(b, l, 1, 1), nn.Dense(self.config.n_embd))
         output = flow(
-            jnp.concatenate([state, action, value], axis=-2),
+            jnp.concatenate([state, value], axis=-2),
             partial(jnp.reshape, newshape=(b, -1, self.config.n_embd)),  # type: ignore
             AddPositionEmbs(),
             partial(nn.Dropout(rate=config.embd_pdrop), deterministic=not train),
@@ -253,6 +244,5 @@ class Transformer(nn.Module):
             nn.Dense(1),
         )
         _, _, s, _ = state.shape
-        _, _, a, _ = action.shape
         _, _, v, _ = value.shape
-        return output[:, s + a - 1 :: s + a + v, 0]
+        return output[:, s - 1 :: s + v, 0]
