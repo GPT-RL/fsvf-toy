@@ -119,26 +119,27 @@ def train(
                     test_size=test_size,
                     steps_per_prompt=steps_per_prompt,
                 )
+                generated_datasets = get_generated_dataset(
+                    data_dir=data_dir,
+                    download_dir=download_dir,
+                    gamma=gamma,
+                    horizon=horizon,
+                    num_generated_examples=num_generated_examples,
+                    steps_per_prompt=steps_per_prompt,
+                )
+                generated_iter = tfds.as_numpy(
+                    generated_datasets["test"]
+                    .cache()  # cache the dataset in memory and repeat.
+                    .repeat(1)
+                    .batch(jax.device_count(), drop_remainder=True)
+                    .prefetch(tf.data.experimental.AUTOTUNE)
+                )
                 yield (
                     preprocess_data(ppo_datasets["train"], repeat=None),
                     preprocess_data(ppo_datasets["test"], repeat=1),
+                    generated_iter,
                 )
 
-        generated_datasets = get_generated_dataset(
-            data_dir=data_dir,
-            download_dir=download_dir,
-            gamma=gamma,
-            horizon=0,
-            num_generated_examples=num_generated_examples,
-            steps_per_prompt=steps_per_prompt,
-        )
-        generated_dataset = generated_datasets["test"]  # stupid tfds
-        generated_iter = tfds.as_numpy(
-            generated_dataset.cache()  # cache the dataset in memory and repeat.
-            .repeat(1)
-            .batch(jax.device_count(), drop_remainder=True)
-            .prefetch(tf.data.experimental.AUTOTUNE)
-        )
     learning_rate_fn = create_learning_rate_scheduler(base_learning_rate=learning_rate)
 
     optimizer = optax.adamw(
@@ -163,7 +164,9 @@ def train(
     p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
-    for curriculum_level, (train_iter, ppo_test_iter) in enumerate(curriculum()):
+    for curriculum_level, (train_iter, ppo_test_iter, generated_iter) in enumerate(
+        curriculum()
+    ):
         for batch in flow(
             train_iter,
             lambda it: itertools.islice(
