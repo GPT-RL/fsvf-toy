@@ -11,27 +11,24 @@ from supervised.train import train
 
 
 def xy():
-    yield "hours", "test error"
     for y in [
+        "test error",
+        "generated error",
+        "error",
+        "test round 1 accuracy",
+        "generated round 1 accuracy",
+        "round 1 accuracy",
         "order accuracy",
         "argmax accuracy",
-        "generated error",
-        "generated loss",
-        "generated round 1 accuracy",
-        "generated round 2 accuracy",
-        "test error",
-        "test loss",
-        "test round 1 accuracy",
+        "curriculum level",
         "test round 2 accuracy",
-        "error",
-        "loss",
-        "round 1 accuracy",
+        "generated round 2 accuracy",
         "round 2 accuracy",
-        "best dev score",
         "steps per second",
         "save count",
     ]:
         yield "step", y
+    yield "hours", "test error"
 
 
 if __name__ == "__main__":
