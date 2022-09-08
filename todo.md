@@ -1,6 +1,2 @@
-- allow lists in config when not sweeping
 - get docker working
-- store tensors to disk during testing for training transformer
-- fix checkpointing
-  - to work with checkpointing
-  - to not require specifying checkpoint # with `--load-path`
+- reduce context size
