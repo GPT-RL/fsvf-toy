@@ -21,11 +21,12 @@ console = Console()
 
 @dataclass
 class DataPoint(generated_dataset.DataPoint):
+    action: Any
     time_step: Any
 
     @staticmethod
-    def from_kwargs(state, action, value, time_step, **_):
-        return DataPoint(state, action, value, time_step)
+    def from_kwargs(*_, state, action, value, time_step, **__):
+        return DataPoint(state=state, action=action, value=value, time_step=time_step)
 
     @classmethod
     def from_exp_tuple(cls, time_step, exp_tuple: ExpTuple):
@@ -73,7 +74,6 @@ class PpoDataset(GeneratorBasedBuilder):
                         state=Tensor(
                             shape=[b, *self.observation_space.shape], dtype=tf.int64
                         ),
-                        action=Tensor(shape=[b], dtype=tf.int64),
                         value=Tensor(shape=[b], dtype=tf.float64),
                     )
                 )
@@ -145,6 +145,7 @@ class PpoDataset(GeneratorBasedBuilder):
 
         for ts in tfds.as_numpy(ds):  # type: ignore
             dp = DataPoint(**ts)
+            del ts["action"]
             del ts["time_step"]
             assert np.unique(dp.action).size == 1
             key = f"{path.stem}_{str.join('_', dp.time_step.astype(str))}"

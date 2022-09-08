@@ -18,7 +18,6 @@ from tensorflow_datasets.core.features import FeaturesDict, Tensor
 @dataclass
 class DataPoint:
     state: Any
-    action: Any
     value: Any
 
 
@@ -69,7 +68,6 @@ class GeneratedDataset(GeneratorBasedBuilder):
                             shape=[self.num_actions, b, *self.observation_space.shape],
                             dtype=tf.int64,
                         ),
-                        action=Tensor(shape=[self.num_actions, b], dtype=tf.int64),
                         value=Tensor(shape=[self.num_actions, b], dtype=tf.float64),
                     )
                 )
@@ -93,7 +91,7 @@ class GeneratedDataset(GeneratorBasedBuilder):
             states[arange, poss[:, 0], poss[:, 1], 1] = 1
             states[arange, goals[:, 0], goals[:, 1], 2] = 1
             return flow(
-                DataPoint(states, actions, values),
+                DataPoint(states, values),
                 asdict,
                 Dataset.from_tensor_slices,
             )
@@ -101,6 +99,7 @@ class GeneratedDataset(GeneratorBasedBuilder):
         for _ in range(self.num_generated_examples):
             *state_shape, _ = self.observation_space.shape
             actions = range(self.num_actions)
+            batch = None
             for action in actions:
                 poss = self.rng.integers(
                     low=0, high=state_shape, size=[self.context_size + 1, 2]
@@ -111,13 +110,15 @@ class GeneratedDataset(GeneratorBasedBuilder):
                 context = make_ds(poss[:-1], goals[:-1], action)
                 query = make_ds(poss[-1:], goals[-1:], action)
                 dp = context.concatenate(query)
-                for dp in flow(
-                    dp.batch(len(dp)),
-                    stack,
-                    lambda d: d.batch(self.num_actions),
-                    tfds.as_numpy,
-                ):
-                    yield str(self.rng.bit_generator.state["state"]), dp
+                if batch is None:
+                    batch = dp
+                else:
+                    batch = batch.concatenate(dp)
+
+            for x in tfds.as_numpy(
+                batch.batch(self.context_size + 1).batch(self.num_actions)
+            ):
+                yield str(self.rng.bit_generator.state["state"]), x
 
     def _split_generators(self, _):
         """Download the data and define splits."""
