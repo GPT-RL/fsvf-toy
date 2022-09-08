@@ -1,5 +1,6 @@
 import itertools
 import logging
+import pickle
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -33,6 +34,9 @@ from supervised.models import Transformer
 from tensorflow.data import Dataset  # type: ignore
 from tensorflow.python.ops.numpy_ops import np_config
 from transformers.models.gpt2.modeling_flax_gpt2 import GPT2Config
+
+CURRICULUM_FNAME = "curriculum.pkl"
+STEP_FNAME = "step.pkl"
 
 
 def train(
@@ -106,10 +110,18 @@ def train(
             .prefetch(tf.data.experimental.AUTOTUNE)
         )
 
+    curriculum_level = 0
+    step = 0
+    if load_path is not None:
+        with Path(load_path, CURRICULUM_FNAME).open("rb") as f:
+            curriculum_level = pickle.load(f)
+        with Path(load_path, STEP_FNAME).open("rb") as f:
+            step = pickle.load(f)
+
     with timer("Loading data..."):
 
         def curriculum():
-            for horizon in itertools.count():
+            for horizon in itertools.count(start=curriculum_level):
                 ppo_datasets = get_ppo_dataset(
                     data_dir=data_dir,
                     download_dir=download_dir,
@@ -135,6 +147,7 @@ def train(
                     .prefetch(tf.data.experimental.AUTOTUNE)
                 )
                 yield (
+                    horizon,
                     preprocess_data(ppo_datasets["train"], repeat=None),
                     preprocess_data(ppo_datasets["test"], repeat=1),
                     generated_iter,
@@ -160,21 +173,16 @@ def train(
     dropout_rngs = random.split(rng, jax.local_device_count())
     logger.info("Training...")
     save_count = 0
-    step = -1
+    step -= 1
     p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
-    for curriculum_level, (train_iter, ppo_test_iter, generated_iter) in enumerate(
-        curriculum()
-    ):
-        for batch in flow(
-            train_iter,
-            lambda it: itertools.islice(
-                it,
-                (1 + curriculum_level) * num_curriculum_steps * 10**curriculum_level,
-            ),
-        ):  # type: ignore
+    for curriculum_level, train_iter, ppo_test_iter, generated_iter in curriculum():
+        for batch in train_iter:
             step += 1
+            if (step + 1) % num_curriculum_steps == 0:
+                break
+
             batch = common_utils.shard(batch)
             if p_train_step is None:
                 model = Transformer(
@@ -222,12 +230,18 @@ def train(
                 state, metrics = p_train_step(state, batch, dropout_rng=dropout_rngs)
             train_metrics.append(metrics)
             if ((step + 1) % save_frequency == 0) and save_dir is not None:
+                ckpt_dir = Path(save_dir) / str(run_logger.run_id)
                 checkpoints.save_checkpoint(
-                    Path(save_dir) / str(run_logger.run_id),
+                    ckpt_dir,
                     target=state,
                     step=step + 1,
                     overwrite=True,
                 )
+                with (ckpt_dir / CURRICULUM_FNAME).open("wb") as f:
+                    pickle.dump(curriculum_level, f)
+                with (ckpt_dir / STEP_FNAME).open("wb") as f:
+                    pickle.dump(step, f)
+
                 save_count += 1
             if step % test_frequency == 0:
 
