@@ -174,13 +174,16 @@ def train(
     logger.info("Training...")
     save_count = 0
     step -= 1
+    curriculum_step = step
     p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
     for curriculum_level, train_iter, ppo_test_iter, generated_iter in curriculum():
         for batch in train_iter:
             step += 1
-            if (step + 1) % num_curriculum_steps == 0:
+            curriculum_step += 1
+            if (step + 1) % ((curriculum_level + 1) * num_curriculum_steps) == 0:
+                curriculum_step = 0
                 break
 
             batch = common_utils.shard(batch)
