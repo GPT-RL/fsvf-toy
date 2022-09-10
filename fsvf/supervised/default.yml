@@ -2,6 +2,7 @@ batch_size: 64
 gamma: 0.9
 input_dim: 20
 learning_rate: 0.0001
+load_path: null
 max_dataset_step: 10_000
 num_actions: 5
 n_embd: 768

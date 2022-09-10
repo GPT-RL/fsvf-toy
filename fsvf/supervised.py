@@ -35,7 +35,7 @@ if __name__ == "__main__":
     visualizer_url = os.getenv("VISUALIZER_URL")
     assert visualizer_url is not None, "VISUALIZER_URL must be set"
 
-    defaults = dict(log_level="INFO", load_path=None)
+    defaults = dict(log_level="INFO")
     defaults_path = Path("fsvf/supervised/default.yml")
     tree = build_tree(
         charts=[
