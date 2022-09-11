@@ -3,13 +3,14 @@ gamma: 0.9
 input_dim: 20
 learning_rate: 0.0001
 load_path: null
+max_curriculum_level: 22
 max_dataset_step: 10_000
 num_actions: 5
 n_embd: 768
 n_head: 12
 n_layer: 12
 num_generated_examples: 1000
-num_curriculum_steps: 15_000
+num_curriculum_steps: 25_000
 seed: 0
 save_frequency: 1000
 steps_per_prompt: 100

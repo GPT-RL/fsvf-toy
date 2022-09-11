@@ -49,6 +49,7 @@ def train(
     learning_rate: float,
     load_path: Optional[Path],
     log_level: str,
+    max_curriculum_level: int,
     max_dataset_step: int,
     num_actions: int,
     num_curriculum_steps: int,
@@ -174,16 +175,21 @@ def train(
     logger.info("Training...")
     save_count = 0
     step -= 1
-    curriculum_step = 1
+
+    curriculum_step_iter = (
+        num_curriculum_steps * (i + 1) for i in range(max_curriculum_level)
+    )
+    increment_curriculum_at = 0
+
     p_train_step = p_test_generated_step = p_test_ppo_step = None
     train_metrics = []
     tick = time.time()
     for curriculum_level, train_iter, ppo_test_iter, generated_iter in curriculum():
+        while increment_curriculum_at <= step:
+            increment_curriculum_at = next(curriculum_step_iter)
         for batch in train_iter:
             step += 1
-            curriculum_step += 1
-            if (curriculum_step % ((curriculum_level + 1) * num_curriculum_steps)) == 0:
-                curriculum_step = 1
+            if increment_curriculum_at == step:
                 break
 
             batch = common_utils.shard(batch)
