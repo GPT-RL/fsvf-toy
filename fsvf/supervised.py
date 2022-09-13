@@ -48,7 +48,7 @@ if __name__ == "__main__":
             )
             for x, y in xy()
         ],
-        config_path=Path("fsvf/supervised/config.yml"),
+        config_path=Path("configs/supervised.yml"),
         defaults_path=defaults_path,
         log_defaults=dict(**defaults, disable_jit=False),
         no_log_defaults=defaults,
@@ -63,7 +63,7 @@ if __name__ == "__main__":
         logger = RunLogger(GRAPHQL_ENDPOINT)
         params = get_load_params(load_id, logger)
         if load_dir is None:
-            with Path("fsvf/supervised/config.yml").open() as f:
+            with Path("configs/supervised.yml").open() as f:
                 load_dir_str = yaml.load(f, Loader=yaml.FullLoader)["save_dir"]
             assert load_dir_str is not None
             load_dir = Path(load_dir_str)

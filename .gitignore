@@ -13,3 +13,4 @@ ppo/config.yml
 Roms.rar
 ignore.py
 .mypy_cache/
+configs/*
